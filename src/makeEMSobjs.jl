@@ -582,244 +582,244 @@ end
     weights::Array{Float64} # cost weights Wgrid, WSoC, Wloss
 end
 
-################ MODEL CREATION ################
+# ################ MODEL CREATION ################
 
-function build_data(; nEV::Int64=2, # number of EVs in the system
-    season::String = "winter", # "summer" or "winter"
-    profType::String, # "weekly" or "daily"
-    loadType::String, # "GV" or "mffbas" or "base_models"
-    year::Int64,
-    fs::Int64 = 4, # samples per hour
-    cellID::String = "SYNSANYO" # cell ID for the battery packs
-    )
-    # This function builds the data for the optimization problem.
-    # The inputs are:
-    # - season: "summer" or "winter"
-    # - profType: "weekly" or "daily"
-    # - loadType: "GV" or "mffbas" or "base_models"
-    # - year: the year of the simulation
-    # The output is a dictionary that contains the models for all the different devices in the Multi-carrier Energy System.
-    # Check inputs
-    # @assert typeof(nEV) == UnitRange{Int64} "nEV must be a range of integers"
-    @assert typeof(nEV) == Int64 "max nEV must be a integer"
-    @assert season ∈ ["summer", "winter"] "Invalid season"
-    @assert profType ∈ ["biweekly", "weekly", "daily", "yearly"] "Invalid profile type"
-    @assert loadType ∈ ["GV", "mffbas", "base_models"] "Invalid load type"
+# function build_data(; nEV::Int64=2, # number of EVs in the system
+#     season::String = "winter", # "summer" or "winter"
+#     profType::String, # "weekly" or "daily"
+#     loadType::String, # "GV" or "mffbas" or "base_models"
+#     year::Int64,
+#     fs::Int64 = 4, # samples per hour
+#     cellID::String = "SYNSANYO" # cell ID for the battery packs
+#     )
+#     # This function builds the data for the optimization problem.
+#     # The inputs are:
+#     # - season: "summer" or "winter"
+#     # - profType: "weekly" or "daily"
+#     # - loadType: "GV" or "mffbas" or "base_models"
+#     # - year: the year of the simulation
+#     # The output is a dictionary that contains the models for all the different devices in the Multi-carrier Energy System.
+#     # Check inputs
+#     # @assert typeof(nEV) == UnitRange{Int64} "nEV must be a range of integers"
+#     @assert typeof(nEV) == Int64 "max nEV must be a integer"
+#     @assert season ∈ ["summer", "winter"] "Invalid season"
+#     @assert profType ∈ ["biweekly", "weekly", "daily", "yearly"] "Invalid profile type"
+#     @assert loadType ∈ ["GV", "mffbas", "base_models"] "Invalid load type"
   
-    ## PV model
-    if loadType == "base_models" # From Joel's Base models
-        MPPT = CSV.read("../Base models/PV_15min.csv", DataFrame, header=false) # measurement of the max. power point tracking
-    else
-        # From Ibrahim's PV model for the NL
-        pvData = matread("../data/input/Arnhem_results_Saffirio_Diab.mat")
-        MPPT=fromSecTo15min(pvData["P_DC_sec"]);
-    end
-    MPPT=Array(MPPT);
-    Npv=17; # number of pv panels
-    if profType ≠ "yearly"
-        # get the daily seasonal profile for the PV
-        MPPT=getSeasonalProfiles(MPPT, type = profType)[season];
-        # for biweekly profiles we need to repeat the weekly profile twice and append the first day to the end
-        if profType == "biweekly" MPPT=repeat(MPPT[1:(end-fs*24)], outer=2); append!(MPPT, MPPT[1:fs*24]) end
-    end
+#     ## PV model
+#     if loadType == "base_models" # From Joel's Base models
+#         MPPT = CSV.read("../Base models/PV_15min.csv", DataFrame, header=false) # measurement of the max. power point tracking
+#     else
+#         # From Ibrahim's PV model for the NL
+#         pvData = matread("../data/input/Arnhem_results_Saffirio_Diab.mat")
+#         MPPT=fromSecTo15min(pvData["P_DC_sec"]);
+#     end
+#     MPPT=Array(MPPT);
+#     Npv=17; # number of pv panels
+#     if profType ≠ "yearly"
+#         # get the daily seasonal profile for the PV
+#         MPPT=getSeasonalProfiles(MPPT, type = profType)[season];
+#         # for biweekly profiles we need to repeat the weekly profile twice and append the first day to the end
+#         if profType == "biweekly" MPPT=repeat(MPPT[1:(end-fs*24)], outer=2); append!(MPPT, MPPT[1:fs*24]) end
+#     end
     
-    spvModel = SPVData(MPPTData = MPPT/1e3*Npv);
+#     spvModel = SPVData(MPPTData = MPPT/1e3*Npv);
     
-    ## BESS model
-    # A battery pack model is composed of three parts:
-    # - its general information, contained in the GenInfo type.
-    # - its performance submodel, contained in the PerfParameters type. This describes the SoC and terminal voltage of a cell.
-    # - its ageing submodel, contained in the AgingParameters type. This describes the evolution of the performance sub-model parameters.
+#     ## BESS model
+#     # A battery pack model is composed of three parts:
+#     # - its general information, contained in the GenInfo type.
+#     # - its performance submodel, contained in the PerfParameters type. This describes the SoC and terminal voltage of a cell.
+#     # - its ageing submodel, contained in the AgingParameters type. This describes the evolution of the performance sub-model parameters.
     
-    # Read data from the E2 of the ESCtoolbox from Plett.
-        # OCV non linear data model
-        bessOCV=JSON3.read(open("../data/input/cell_models/$cellID-modelocv.json", "r"),
-                    Dict{String, Vector{Float64}});
-        # Dynamic ECM model, with np=1
-        bessDYN=JSON3.read(open("../data/input/cell_models/$cellID-modeldyn-no-hys.json", "r"),
-                    Dict{String, Union{Vector{Float64}, Vector}});
-        # bessOCVmat = matread("../data/input/cell_models/E2model-ocv.mat")
-        # # Dynamic ECM model
-        # bessDYNmat = matread("../data/input/cell_models/E2model.mat")
-        # # Unpack
-        # bessOCVmat=bessOCVmat["model"];
-        # bessDYNmat=bessDYNmat["model"];
+#     # Read data from the E2 of the ESCtoolbox from Plett.
+#         # OCV non linear data model
+#         bessOCV=JSON3.read(open("../data/input/cell_models/$cellID-modelocv.json", "r"),
+#                     Dict{String, Vector{Float64}});
+#         # Dynamic ECM model, with np=1
+#         bessDYN=JSON3.read(open("../data/input/cell_models/$cellID-modeldyn-no-hys.json", "r"),
+#                     Dict{String, Union{Vector{Float64}, Vector}});
+#         # bessOCVmat = matread("../data/input/cell_models/E2model-ocv.mat")
+#         # # Dynamic ECM model
+#         # bessDYNmat = matread("../data/input/cell_models/E2model.mat")
+#         # # Unpack
+#         # bessOCVmat=bessOCVmat["model"];
+#         # bessDYNmat=bessDYNmat["model"];
 
-        # Bucket model info
-        Q0 = bessOCV["OCVQ"]; Q0 = mean(Q0); # [Ah/cell]
-        η = bessOCV["OCVeta"]; η = mean(η); # [p.u.]
+#         # Bucket model info
+#         Q0 = bessOCV["OCVQ"]; Q0 = mean(Q0); # [Ah/cell]
+#         η = bessOCV["OCVeta"]; η = mean(η); # [p.u.]
 
-        # ECM info
-        T=bessDYN["temps"]; T=T[1,:]; # [C]
-        R0Param=bessDYN["R0Param"]; # [Ohm]
-        RParam=bessDYN["RParam"]; # [Ohm]
-        RCParam=bessDYN["RCParam"]; # τ [s]
-        Tind25=findall(x->x==25, T)
+#         # ECM info
+#         T=bessDYN["temps"]; T=T[1,:]; # [C]
+#         R0Param=bessDYN["R0Param"]; # [Ohm]
+#         RParam=bessDYN["RParam"]; # [Ohm]
+#         RCParam=bessDYN["RCParam"]; # τ [s]
+#         Tind25=findall(x->x==25, T)
     
-    # Heliox 43kWh battery pack seems a little bit too much lets use a 20kWh pack.
-    PowerLim = [-17, 17]; P0 = 0; # Power limits and initial condition [kW]. 
-    SoCLim = [0.2, 0.95]; SoC0 = 0.9; # SoC limits and initial condition [p.u.].
-    # State of Health
-    SoHQ = 1; SoHR0 = R0Param[Tind25][1];
-    if cellID == "SYNSANYO"
-        Np = 10; Ns = 100; # Branches in parallel and series cells per branch.
-        ocv_params=OCVlinearPerfParams()
-        # Ageing submodel
-        # aging_params=empAgingParams();
-        aging_params=JinAgingParams();
-    elseif cellID == "A123"
-        Np = 25; Ns = 110; # Branches in parallel and series cells per branch.
-        # first option, 
-        # ocv_params.ocvLine = [2.5, 1.1]
-        # second option from 20% to 95% SoC
-        ocv_params=OCVlinearPerfParams(ocvLine = [3.2, 0.2105])
-        # Ageing submodel
-        # aging_params=empAgingParams();
-        Cell = Construct("A123");
-        aging_params=JinAgingParams(Rs = Cell.Neg.Rs,
-                            An = Cell.Const.CC_A,
-                            Ln = Cell.Neg.L,
-                            z100p = Cell.Neg.θ_100,
-                            z0p = Cell.Neg.θ_0,
-                            # εₑ0 = Cell.Neg.ϵ_e,
-                            t⁺₀ = Cell.Const.t_plus,
-                            # DeRef= Cell.Neg.De,
-                            ce_avg = Cell.Const.ce0,
-                            # ce_max=Cell.Const.ce0,
-                            σn = Cell.Neg.σ,
-                            εₛ = Cell.Neg.ϵ_s, # check
-                            );
-    end
-    initVal=494.246; # Cost info [USD/kWh]
-    # General info definition
-    gen_params=Generic(PowerLim, P0, SoCLim, SoC0, Q0, SoHQ, SoHR0, Np, Ns, η, ocv_params, initVal);
-    # Performance submodel
-    # perf_params=bucketPerfParams();
-    perf_params=ECMPerfParams(R0Param=R0Param[Tind25], RParam=RParam[Tind25], RCParam=RCParam[Tind25])
+#     # Heliox 43kWh battery pack seems a little bit too much lets use a 20kWh pack.
+#     PowerLim = [-17, 17]; P0 = 0; # Power limits and initial condition [kW]. 
+#     SoCLim = [0.2, 0.95]; SoC0 = 0.9; # SoC limits and initial condition [p.u.].
+#     # State of Health
+#     SoHQ = 1; SoHR0 = R0Param[Tind25][1];
+#     if cellID == "SYNSANYO"
+#         Np = 10; Ns = 100; # Branches in parallel and series cells per branch.
+#         ocv_params=OCVlinearPerfParams()
+#         # Ageing submodel
+#         # aging_params=empAgingParams();
+#         aging_params=JinAgingParams();
+#     elseif cellID == "A123"
+#         Np = 25; Ns = 110; # Branches in parallel and series cells per branch.
+#         # first option, 
+#         # ocv_params.ocvLine = [2.5, 1.1]
+#         # second option from 20% to 95% SoC
+#         ocv_params=OCVlinearPerfParams(ocvLine = [3.2, 0.2105])
+#         # Ageing submodel
+#         # aging_params=empAgingParams();
+#         Cell = Construct("A123");
+#         aging_params=JinAgingParams(Rs = Cell.Neg.Rs,
+#                             An = Cell.Const.CC_A,
+#                             Ln = Cell.Neg.L,
+#                             z100p = Cell.Neg.θ_100,
+#                             z0p = Cell.Neg.θ_0,
+#                             # εₑ0 = Cell.Neg.ϵ_e,
+#                             t⁺₀ = Cell.Const.t_plus,
+#                             # DeRef= Cell.Neg.De,
+#                             ce_avg = Cell.Const.ce0,
+#                             # ce_max=Cell.Const.ce0,
+#                             σn = Cell.Neg.σ,
+#                             εₛ = Cell.Neg.ϵ_s, # check
+#                             );
+#     end
+#     initVal=494.246; # Cost info [USD/kWh]
+#     # General info definition
+#     gen_params=Generic(PowerLim, P0, SoCLim, SoC0, Q0, SoHQ, SoHR0, Np, Ns, η, ocv_params, initVal);
+#     # Performance submodel
+#     # perf_params=bucketPerfParams();
+#     perf_params=ECMPerfParams(R0Param=R0Param[Tind25], RParam=RParam[Tind25], RCParam=RCParam[Tind25])
     
-    # wrap everything in a BESSData type
-    # battModel = BESSData(gen_params, perf_params, aging_params, initVal);
-    battModel = BESSData(gen_params, perf_params, aging_params, cellID);
+#     # wrap everything in a BESSData type
+#     # battModel = BESSData(gen_params, perf_params, aging_params, initVal);
+#     battModel = BESSData(gen_params, perf_params, aging_params, cellID);
 
-    ## EV MODEL
-    # An electric vehicle model is composed of two parts:
-    # - its battery pack, contained in a BESSData type.
-    # - its driving submodel, contained in the driveData type. This describes the availability, 
-    # times of departure and arrival, and the reference SoC of the EV.
-    # Battery pack definition
-    PowerLim = [-12.5, 12.5] #check
-    # The battery pack has to be around 400Vdc and 50kWh
-    if cellID == "SYNSANYO"
-        Ns = 100; Np = 25;
-    elseif cellID == "A123"
-        Ns = 110; Np = 61;
-    end
-    P0=[0, 0]; # initial
-    Q0 = Q0.*ones(nEV); # [Ah/cell]
-    SoC0 = [0.6, 0.8]; # initial
-    vt0=[gen_params.OCVParam.ocvLine[1]+gen_params.OCVParam.ocvLine[2].*SoC0[n] for n ∈ 1:nEV]
-    gen_params = [Generic(PowerLim, P0[n], SoCLim, SoC0[n], Q0[n], SoHQ, SoHR0, Np, Ns, η, ocv_params, initVal) for n ∈ 1:nEV]
-    perf_params=[ECMPerfParams(R0Param=R0Param[Tind25], RParam=RParam[Tind25],
-                RCParam=RCParam[Tind25], vt0=vt0[n]) for n ∈ 1:nEV]
-    batteryPack = [BESSData(gen_params[n], perf_params[n], aging_params, cellID) for n ∈ 1:nEV]
+#     ## EV MODEL
+#     # An electric vehicle model is composed of two parts:
+#     # - its battery pack, contained in a BESSData type.
+#     # - its driving submodel, contained in the driveData type. This describes the availability, 
+#     # times of departure and arrival, and the reference SoC of the EV.
+#     # Battery pack definition
+#     PowerLim = [-12.5, 12.5] #check
+#     # The battery pack has to be around 400Vdc and 50kWh
+#     if cellID == "SYNSANYO"
+#         Ns = 100; Np = 25;
+#     elseif cellID == "A123"
+#         Ns = 110; Np = 61;
+#     end
+#     P0=[0, 0]; # initial
+#     Q0 = Q0.*ones(nEV); # [Ah/cell]
+#     SoC0 = [0.6, 0.8]; # initial
+#     vt0=[gen_params.OCVParam.ocvLine[1]+gen_params.OCVParam.ocvLine[2].*SoC0[n] for n ∈ 1:nEV]
+#     gen_params = [Generic(PowerLim, P0[n], SoCLim, SoC0[n], Q0[n], SoHQ, SoHR0, Np, Ns, η, ocv_params, initVal) for n ∈ 1:nEV]
+#     perf_params=[ECMPerfParams(R0Param=R0Param[Tind25], RParam=RParam[Tind25],
+#                 RCParam=RCParam[Tind25], vt0=vt0[n]) for n ∈ 1:nEV]
+#     batteryPack = [BESSData(gen_params[n], perf_params[n], aging_params, cellID) for n ∈ 1:nEV]
 
-    # Driving information definition
-    μD = 3.5; σD=1.5; depParam=[6, 12]; arrParam=[1, 8]; # Parameters for the Gaussian distributions
-    # availability
-    av = [availabilityEV(length(MPPT), 4) for n ∈ 1:nEV];
-    refSoC=[0.85, 0.85]; # user requirement
-    drive_info = [driveData(μD, σD, depParam, arrParam, refSoC[n], av[n][1], av[n][2], av[n][3]) for n in 1:nEV]
-    # wrap everything in a EVData type
-    evModel = [EVData(batteryPack[n], drive_info[n]) for n in 1:nEV]
+#     # Driving information definition
+#     μD = 3.5; σD=1.5; depParam=[6, 12]; arrParam=[1, 8]; # Parameters for the Gaussian distributions
+#     # availability
+#     av = [availabilityEV(length(MPPT), 4) for n ∈ 1:nEV];
+#     refSoC=[0.85, 0.85]; # user requirement
+#     drive_info = [driveData(μD, σD, depParam, arrParam, refSoC[n], av[n][1], av[n][2], av[n][3]) for n in 1:nEV]
+#     # wrap everything in a EVData type
+#     evModel = [EVData(batteryPack[n], drive_info[n]) for n in 1:nEV]
 
-    # Solar thermal model
-    Pn=0.5; capex= 1500; ηST = 0.6;
-    stModel = ElectroThermData(Pn, capex, ηST);
+#     # Solar thermal model
+#     Pn=0.5; capex= 1500; ηST = 0.6;
+#     stModel = ElectroThermData(Pn, capex, ηST);
 
-    # TESS model
-    tessModel = TESSData();
-    # Power Electronic Interface model
-    peiModel = peiData();
+#     # TESS model
+#     tessModel = TESSData();
+#     # Power Electronic Interface model
+#     peiModel = peiData();
 
-    ## Grid Model
-    # The grid is represented by:
-    # - λ energy prices. [buy; sell] 
-    # - loadE electrical load measurement
-    # - loadTh thermal load measurement
-    # for anual profiles the length is (365*24*fs)+1=35041.
+#     ## Grid Model
+#     # The grid is represented by:
+#     # - λ energy prices. [buy; sell] 
+#     # - loadE electrical load measurement
+#     # - loadTh thermal load measurement
+#     # for anual profiles the length is (365*24*fs)+1=35041.
 
-    ## pick file paths, read and convert to array
-    # for the prices
-    # Raw EPEX FTP server data
-    pricePath = "../data/input/EPEX/auction_spot_prices_netherlands_$year.csv"
-    spotPriceDF = CSV.read(pricePath, DataFrame, delim=',', header=2);
+#     ## pick file paths, read and convert to array
+#     # for the prices
+#     # Raw EPEX FTP server data
+#     pricePath = "../data/input/EPEX/auction_spot_prices_netherlands_$year.csv"
+#     spotPriceDF = CSV.read(pricePath, DataFrame, delim=',', header=2);
 
-    #= for IECON 2023 =#
-        # summary data
-        # pricePath = "../data/input/EPEX/summaryPrice_Winter.csv";
-        # spotPriceDF = CSV.read(pricePath, DataFrame, delim=',', header=1);
-        # pricePath = "../data/input/EPEX/summaryPrice_Summer.csv";
-        # spotPriceDF = CSV.read(pricePath, DataFrame, delim=',', header=1);
+#     #= for IECON 2023 =#
+#         # summary data
+#         # pricePath = "../data/input/EPEX/summaryPrice_Winter.csv";
+#         # spotPriceDF = CSV.read(pricePath, DataFrame, delim=',', header=1);
+#         # pricePath = "../data/input/EPEX/summaryPrice_Summer.csv";
+#         # spotPriceDF = CSV.read(pricePath, DataFrame, delim=',', header=1);
 
-    # for the electrical load
-    if loadType == "GV"
-        # processed synthezided load profile 1 year
-        loadEPath = "../data/input/GV/Load_1.csv";
-        loadE = CSV.read(loadEPath, DataFrame, header = false) # electric load
-        # loadE = CSV.read("../data/input/GV/Load_1.csv", DataFrame, header=false) # electric load
-        loadE= Vector(loadE[!,1]);
-    elseif loadType == "mffbas"
-        # From Market Facilitation Forum (MFF) and the Beheerder Afspraken Stelsel (BAS) i.e. mffbas
-        loadEPath = "../data/input/mffbas/summaryE1_$year.csv"
-        #= for IECON 2023 =#
-        # loadEPath = "../data/input/mffbas/summaryE1_mean_Winter.csv"
-        # loadEPath = "../data/input/mffbas/summaryE1_mean_Summer.csv"
-        loadE = CSV.read(loadEPath, DataFrame) # electric load
-        loadE= Vector(loadE[!,2]); 
+#     # for the electrical load
+#     if loadType == "GV"
+#         # processed synthezided load profile 1 year
+#         loadEPath = "../data/input/GV/Load_1.csv";
+#         loadE = CSV.read(loadEPath, DataFrame, header = false) # electric load
+#         # loadE = CSV.read("../data/input/GV/Load_1.csv", DataFrame, header=false) # electric load
+#         loadE= Vector(loadE[!,1]);
+#     elseif loadType == "mffbas"
+#         # From Market Facilitation Forum (MFF) and the Beheerder Afspraken Stelsel (BAS) i.e. mffbas
+#         loadEPath = "../data/input/mffbas/summaryE1_$year.csv"
+#         #= for IECON 2023 =#
+#         # loadEPath = "../data/input/mffbas/summaryE1_mean_Winter.csv"
+#         # loadEPath = "../data/input/mffbas/summaryE1_mean_Summer.csv"
+#         loadE = CSV.read(loadEPath, DataFrame) # electric load
+#         loadE= Vector(loadE[!,2]); 
         
-    elseif loadType == "base_models" # Joel's base models
-        loadEPath = "../data/input/Base models/Load_Profile_15min.csv";
-        loadE = CSV.read(loadEPath, DataFrame, transpose=true, header=false)
-        loadE= Vector(loadE[!,1]); 
-    end
-    # normalize loadE
-    loadE=loadE./maximum(loadE);
-    # peak of 2kW
-    loadE=loadE*2.5;
-    # for the thermal load
-    loadThPath= "../Base models/Thermal_load_15min.csv";    
-    loadTh = CSV.read(loadThPath, DataFrame, header = false) # thermal load
-    loadTh= Vector(loadTh[!,1]); loadTh=loadTh*1e-3;
+#     elseif loadType == "base_models" # Joel's base models
+#         loadEPath = "../data/input/Base models/Load_Profile_15min.csv";
+#         loadE = CSV.read(loadEPath, DataFrame, transpose=true, header=false)
+#         loadE= Vector(loadE[!,1]); 
+#     end
+#     # normalize loadE
+#     loadE=loadE./maximum(loadE);
+#     # peak of 2kW
+#     loadE=loadE*2.5;
+#     # for the thermal load
+#     loadThPath= "../Base models/Thermal_load_15min.csv";    
+#     loadTh = CSV.read(loadThPath, DataFrame, header = false) # thermal load
+#     loadTh= Vector(loadTh[!,1]); loadTh=loadTh*1e-3;
     
-    # check length of loadE, loadTh
-    length(loadE) == (365*24*fs+1) ? nothing : loadE = [loadE[1]; loadE];
+#     # check length of loadE, loadTh
+#     length(loadE) == (365*24*fs+1) ? nothing : loadE = [loadE[1]; loadE];
 
-    # Data processing (upsampling, seasonal patterns, etc.)
-    if profType ≠ "yearly"
-        priceData = processPrices(spotPriceDF; type="raw", profType = profType, season = season);
-        # get the profile for the loads
-        loadE=getSeasonalProfiles(loadE, type = profType)[season];
-        loadTh=getSeasonalProfiles(loadTh, type = profType)[season];
-        # for biweekly profiles we need to repeat the weekly profile twice and append the first day to the end
-        if profType == "biweekly"
-            loadE=repeat(loadE[1:(end-fs*24)], outer=2); append!(loadE, loadE[1:fs*24])
-            loadTh=repeat(loadTh[1:(end-fs*24)], outer=2); append!(loadTh, loadTh[1:fs*24])
-        end
-    else
-        priceData = processPrices(spotPriceDF; type="raw", profType = profType);
-    end
-    # Grid connection limits
-    gridModel = gridData([-17, 17], priceData, loadE, loadTh);
+#     # Data processing (upsampling, seasonal patterns, etc.)
+#     if profType ≠ "yearly"
+#         priceData = processPrices(spotPriceDF; type="raw", profType = profType, season = season);
+#         # get the profile for the loads
+#         loadE=getSeasonalProfiles(loadE, type = profType)[season];
+#         loadTh=getSeasonalProfiles(loadTh, type = profType)[season];
+#         # for biweekly profiles we need to repeat the weekly profile twice and append the first day to the end
+#         if profType == "biweekly"
+#             loadE=repeat(loadE[1:(end-fs*24)], outer=2); append!(loadE, loadE[1:fs*24])
+#             loadTh=repeat(loadTh[1:(end-fs*24)], outer=2); append!(loadTh, loadTh[1:fs*24])
+#         end
+#     else
+#         priceData = processPrices(spotPriceDF; type="raw", profType = profType);
+#     end
+#     # Grid connection limits
+#     gridModel = gridData([-17, 17], priceData, loadE, loadTh);
     
-    # Heat pump model
-    # only a uniderectional (heating) HP for now
-    Pn=4; capex= 500; ηHP = 3; 
-    # The initial condition follow the power balance
-    # Phpe0=(loadTh[1]-MPPT[1]*ηST)/ηHP;
-    hpModel = ElectroThermData(Pn, capex, ηHP);
+#     # Heat pump model
+#     # only a uniderectional (heating) HP for now
+#     Pn=4; capex= 500; ηHP = 3; 
+#     # The initial condition follow the power balance
+#     # Phpe0=(loadTh[1]-MPPT[1]*ηST)/ηHP;
+#     hpModel = ElectroThermData(Pn, capex, ηHP);
 
-    data=Dict("SPV"=>spvModel, "BESS"=>battModel, "EV"=>evModel,
-        "ST"=>stModel, "HP"=>hpModel, "TESS"=>tessModel,
-        "grid"=>gridModel, "PEI"=>peiModel);
-    return data
-end
+#     data=Dict("SPV"=>spvModel, "BESS"=>battModel, "EV"=>evModel,
+#         "ST"=>stModel, "HP"=>hpModel, "TESS"=>tessModel,
+#         "grid"=>gridModel, "PEI"=>peiModel);
+#     return data
+# end

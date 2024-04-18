@@ -222,6 +222,8 @@ end
     Ns::Float64 # pack series cells
     η::Float64 # coulombic efficiency [p.u.]
     OCVParam::OCVParams
+    vLim::Array{Float64} # Min-Max voltage [V]
+    ηC::Float64 # charger/converter efficiency [p.u.]
     # Cost info
     initValue::Float64 # Initial value of the BESS [USD/kWh]
 end
@@ -482,38 +484,41 @@ function availabilityEV(ns, # number of samples
     sort!(μtCon_tarr_df, "Arrival Time")
     # add a column with the arrival time in hs
     μtCon_tarr_df.tArr = collect(0:0.5:23.5)
-    tArr = rand(gmm, ndays+1); 
-    # check if the arrival time is within the limits 0-23.5, if outside, resample
-    for day in 1:ndays+1
-        while tArr[day] > 23.5 || tArr[day] < 0
-            tArr[day] = rand(gmm)
-        end
-    end
-    # take the sampled tArr and interpolate the mean session length
+    gmmt = truncated(gmm, 0, 23.5) # truncate the GMM to the limits
+    tArr = rand(gmmt, ndays+1)
+
+    # # Resample arrival times if outside the limits
+    # tArr = [(t > 23.5 || t < 0 ? rand(gmm) : t) for t in tArr]
+
+    # Interpolate mean session length for arrival times
     tCon_interp = linear_interpolation(μtCon_tarr_df.tArr, μtCon_tarr_df.home)
-    tDep = tArr .+ tCon_interp.(tArr);
-    # check if the dep time is within the limits 0-23.5, if outside, adjust
-    [tDep[day] > 23.5 ? tDep[day] = tDep[day] - 24 : nothing for day ∈ 1:ndays+1]
-    # the first arrival is day 0, so the first departure is after that.
-    # Thus the tDep[1] <=> tArr[2]
-    tDep = tDep[1:end-1]; tArr = tArr[2:end];
-    # Check that the departure time is before the arrival time 
-    # and that it is not 0.
-    if any(tDep .== 0)
-        tDep[tDep .== 0] .= 0.5
-        if any(tDep .> tArr)
-            tArr[tDep .> tArr] =tArr[tDep .> tArr] .+ 0.5
-        end
-    end
-    # Create the availability signal   
-    
-    
+    tDep = tArr .+ tCon_interp.(tArr)
+
+    # Adjust departure times if outside the limits
+    tDep = [td > 23.5 ? td - 23.5 : td for td ∈ tDep]
+
+    # Adjust first arrival and last departure times
+    tDep = tDep[1:end-1]
+    tArr = tArr[2:end]
+
+    # Ensure departure time is before arrival time and not 0
+    tDep = [t == 0 ? 0.5 : t for t in tDep]
+    tArr = [tDep[i] > t ? tDep[i] + 1.0 : t for (i, t) in enumerate(tArr)]
+    # Create the availability signal
     for day in 1:ndays
         # Determine the time indices corresponding to arrival and departure for this day
-        t = collect(0:1/fs:23.75)
+        t = collect(0:1/fs:(24-1/fs))
         # get the index of the departure and arrival times
-        depIdx = findfirst(x -> x >= tDep[day], t)
-        arrIdx = findfirst(x -> x >= tArr[day], t)
+        depIdx = findmin(abs.(tDep[day] .- t))[2]
+        arrIdx = findmin(abs.(tArr[day] .- t))[2]
+        # modify the index to be in the range of the time series, to avoid modifying supports
+        tDep[day] = t[depIdx]
+        tArr[day] = t[arrIdx]
+        # depIdx = findfirst(x -> x >= tDep[day], t)
+        # arrIdx = findfirst(x -> x >= tArr[day], t)
+        # Correct for the day
+        depIdx = depIdx + (day-1)*24*fs
+        arrIdx = arrIdx + (day-1)*24*fs
         # Mark the time series as parked during the parked interval for this day
         if depIdx <= arrIdx
             γ[depIdx:arrIdx] .= 0
@@ -568,6 +573,7 @@ end;
 
 @with_kw mutable struct gridData
     PowerLim::Array{Float64} # Max-Min power [kW]
+    η::Float64 # multiport-converter efficiency [p.u.]
     λ::Array # energy prices. [buy; sell] 
     loadE::Array{Float64}; # electrical load measurement
     loadTh::Array{Float64}; # thermal load measurement

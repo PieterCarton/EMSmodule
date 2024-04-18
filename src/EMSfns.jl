@@ -44,6 +44,7 @@ function spv!(model::InfiniteModel, data::Dict) # solar pv panel
     # make new time window
     it0 = round(Int,(t0/Δt));
     itend = it0+length(supports(t))-1;
+    
     MPPTmeas = data["SPV"].MPPTData[it0:itend];
     # simulated forecast
     MPPTnoisy = zeros(size(MPPTmeas));
@@ -92,7 +93,7 @@ function st!(model::InfiniteModel, data::Dict) # solar thermal
     # The thermal pv/heatpipes are only the converted measurement of the irradiance.
     t = model[:t]; 
     Dt = supports(t);
-    t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
+    t0 = supports(t)[1]; Δt = supports(t)[2]-supports(t)[1];
     # make new time window
     it0 = round(Int,(t0/Δt));
     itend = it0+length(supports(t))-1;
@@ -155,10 +156,10 @@ conditions and a bucket model constraint.
 # Returns
 - `model::InfiniteModel`: The updated InfiniteModel with the TESS variables and constraints added.
 """
-function tess!(model::InfiniteModel, data::Dict) # stationary battery pack
+function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
     # Thermal Energy Storage System
     t = model[:t];
-    t0 = supports(t)[1]; Tw=supports(t)[end]-supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
+    t0 = supports(t)[1];
     # Bucket model
     # Extract data
     Qtess = data["TESS"].Q; # Capacity [kWh]
@@ -166,24 +167,26 @@ function tess!(model::InfiniteModel, data::Dict) # stationary battery pack
     PtessMax = data["TESS"].PowerLim[2]; # Max power [kW]
     # Ptess0 = data["TESS"].P0; # Initial Power [p.u.]
     SoCtessMin = data["TESS"].SoCLim[1]; # Min State of Charge [p.u.]
-    SoCtessMax = data["TESS"].SoCLim[2]; # Max State of Charge [p.u.]
+    # SoCtessMax = data["TESS"].SoCLim[2]; # Max State of Charge [p.u.]
     SoCtess0 = data["TESS"].SoC0; # Initial State of Charge [p.u.]
     ηtess = data["TESS"].η; # thermal efficiency
        
     # Add variables
     @variables(model, begin
-        SoCtessMin ≤ SoCtess ≤ SoCtessMax, Infinite(t) # State of Charge
+        # SoCtessMin ≤ SoCtess ≤ SoCtessMax, Infinite(t) # State of Charge
+        SoCtess, Infinite(t) # State of Charge
         Ptess, Infinite(t) # Thermal power
         bPtess, Infinite(t), Bin # Binary variable for TESS power
         0 ≤ PtessPos, Infinite(t) # Ptess^+ out power
         PtessNeg ≤ 0, Infinite(t) # Ptess^- in power
     end);
     # Dummy variables for bidirectional power flow, ensuring only export or import
-    # @variable(model, 0 ≤ PtessPos, Infinite(t), start=Ptess0); # Ptess^+ out power
     @constraints(model, begin
         bPtess*PtessMin ≤ PtessNeg
         PtessNeg + PtessPos .== Ptess
+        # PtessNeg * (1/ηtess) + PtessPos * ηtess .== Ptess
         PtessPos ≤ (1-bPtess)*PtessMax
+        SoCtessMin ≤ SoCtess
     end);
     
     # Initial conditions
@@ -201,6 +204,7 @@ end;
 
 # other
 # Grids
+
 """
     gridConn(model::InfiniteModel, data::Dict)
 
@@ -212,32 +216,31 @@ The `gridConn` function is used to define a grid connection of a power electroni
 
 # Returns
 - `model::InfiniteModel`: The updated simulation model.
-
 """
 function gridConn!(model::InfiniteModel, data::Dict) # power electronic interface
-    t = model[:t]; t0=supports(t)[1];
+    t = model[:t];
     # Grid limits
     PgMin = data["grid"].PowerLim[1]; # Min power going out
     PgMax = data["grid"].PowerLim[2]; # Max power coming in
-    # Pg0 = data["grid"].P0; # initial condition
-    
+    ηg = data["grid"].η; # converter efficiency
+
     # Add variables
-    @variable(model, Pg, Infinite(t));  # grid power
-    @variable(model, bPg, Infinite(t), Bin) # Binary variable for Grid power
+    @variables(model, begin
+        Pg, Infinite(t)  # grid power
+        bPg, Infinite(t), Bin # Binary variable for Grid power
+        0 ≤ PgPos, Infinite(t) # Pg^+ out/buy power
+        PgNeg ≤ 0, Infinite(t), (start=0) # Pg^- in/sell power
+    end)
+    
     # Dummy variables for bidirectional power flow, ensuring only export or import
-    # @variable(model, 0 ≤ PgPos, Infinite(t), start=Pg0); # Pg^+ out/buy power
-    @variable(model, 0 ≤ PgPos, Infinite(t)); # Pg^+ out/buy power
-    @constraint(model, PgPos ≤ (1-bPg)*PgMax)
-    
-    @variable(model, PgNeg ≤ 0, Infinite(t), start=0); # Pg^- in/sell power
-    @constraint(model, bPg*PgMin ≤ PgNeg)
-    
-    @constraint(model, PgNeg + PgPos .== Pg);
-    
-    # @constraint(model, Pg(t0) == Pg0);
+    @constraints(model, begin
+        PgPos ≤ (1-bPg)*PgMax
+        bPg*PgMin ≤ PgNeg
+        # PgNeg + PgPos .== Pg
+        PgNeg * (1/ηg) + PgPos * ηg .== Pg
+    end)
     return model;
 end;
-
 
 """
     gridThermal(model::InfiniteModel, sets::modelSettings, data::Dict)
@@ -322,30 +325,6 @@ function pei!(model::InfiniteModel, sets::modelSettings, data::Dict) # power ele
 
     model[:powerBalance]=@constraint(model, model[:PpvMPPT] + model[:Pbess] + Pev_sum + model[:Pg] .== Ple + Phpe)
 
-    # # Power balance DC busbar
-    # # If we have EVs
-    # if any(name.(all_variables(model)) .== "Pev[1]")
-    #     if nEV != 1
-    #         if any(name.(all_variables(model)) .== "Phpe") # If we have HP
-    #             model[:powerBalance]=@constraint(model, model[:PpvMPPT] + model[:Pbess] +
-    #                 sum(model[:γ_cont][n].*model[:Pev][n] for n in 1:nEV) + model[:Pg] .== Ple + model[:Phpe]);
-    #         else
-    #             model[:powerBalance]=@constraint(model, model[:PpvMPPT] + model[:Pbess] +
-    #                 sum(model[:γ_cont][n].*model[:Pev][n] for n in 1:nEV) + model[:Pg] .== Ple);
-    #         end
-    #     else
-    #         if any(name.(all_variables(model)) .== "Phpe") 
-    #             model[:powerBalance]=@constraint(model, model[:PpvMPPT] + model[:Pbess] +
-    #                 sum(model[:γ_cont].*model[:Pev][n] for n in 1:nEV) + model[:Pg] .== Ple + model[:Phpe]);
-    #         else
-    #             model[:powerBalance]=@constraint(model, model[:PpvMPPT] + model[:Pbess] +
-    #                 sum(model[:γ_cont].*model[:Pev][n] for n in 1:nEV) + model[:Pg] .== Ple);
-    #         end
-    #     end
-    # else # If we don't have EVs
-    #     model[:powerBalance]=@constraint(model, model[:PpvMPPT] + model[:Pbess] + model[:Pg] .== Ple + model[:Phpe]);
-    # end
-
     return model;
 end;
 
@@ -366,13 +345,11 @@ The function includes weights and picks how to build the objective depending on 
 
 """
 function costFunction!(model, sets::modelSettings, data::Dict) # Objective function
-    keys=["SPV","PEI","ST","HP"]
     W = sets.costWeights;
     Dt = sets.dTime;
     t = model[:t]; 
     t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
     # make new time window
-    # it0 = round(Int, t0/Δt + 1);
     it0 = round(Int,t0/Δt);
     itend = it0+length(Dt)-1;
 
@@ -392,34 +369,44 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     # totCAPEX = totCAPEX+data["TESS"].capex*data["TESS"].Q;
 
     # Grid costs
-    cgrid = model[:PgPos]*λbuy + model[:PgNeg]*λsell;
     Wgrid = W[1]; # regularization factor for grid cost. max(λ)*max(P)
-
+    cgrid = Wgrid .* (model[:PgPos]*λbuy + model[:PgNeg]*λsell);
+    
     # Aging costs CHECK
     clossbess = 1.2; # cost of lost capacity EUR/Ah
     Wloss=W[3]; # regularization factor for lost capacity
+    # cQloss = Wloss != 0 ? ( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600) : 0.0;
+    cQloss = Wloss != 0 ? ∫(( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600),t) : 0.0;
 
-    # Penalty for not charging
-    # If we have EVs
-    if !isempty(model[:ϵSoC])
-        nEV = sets.nEV; # extract set
-        ϵSoC=model[:ϵSoC]; # error from ref
-        WSoC=W[2]; # penalty
-        pDep=WSoC*sum(ϵSoC[n]^2 for n in eachindex(ϵSoC)); # penalty for not charging
-        # Build objective function
-        if any(name.(all_variables(model)) .== "ilossbess") # degradation check
-            @objective(model, Min, Wgrid*∫(cgrid,t)/sum(Dt)+pDep+ 
-                Wloss*clossbess*∫((model[:ilossbess]+sum(model[:ilossev][n] for n in nEV))/3600,t)/sum(Dt));
-        else
-            @objective(model, Min, Wgrid*∫(cgrid,t)/sum(Dt)+pDep);
-        end
-    else # If we don't have EVs
-        if any(name.(all_variables(model)) .== "ilossbess") # degradation check
-            @objective(model, Min, Wgrid*∫(cgrid,t)/sum(Dt)+Wloss*clossbess*∫(model[:ilossbess]/3600,t)/sum(Dt));
-        else
-            @objective(model, Min, Wgrid*∫(cgrid,t)/sum(Dt));
-        end
-    end    
+    # # Penalty for excessive actions
+    # xπ = Vector{GeneralVariableRef}();
+    # for (~,var) ∈ enumerate([:Pbess, :Pev, :Phpe])
+    #     append!(xπ, model[var]);
+    # end
+    # Wπ = W[5]; # penalty for excessive actions
+    # cπ = Wπ*∫(sum(xπ[i].^2 for i ∈ eachindex(xπ)),t);
+
+    # Penalty/soft constraint for TESS overcharging
+    Wtess = W[4]; # penalty for TESS overcharging
+    SoCtess = model[:SoCtess]; SoCtessMax = data["TESS"].SoCLim[2];
+    @variable(model, auxTess ≥ 0, Infinite(t));
+    @constraint(model, auxTess ≥ SoCtess - SoCtessMax);
+
+    # Define penalty for not charging
+    WSoCDep = W[2]
+    pDep = (isempty(model[:ϵSoC]) ? 0 : WSoCDep*sum(model[:ϵSoC][n]^2 for n ∈ eachindex(model[:ϵSoC])))
+
+    # Define objective function
+    if any(name.(all_variables(model)) .== "ilossbess")
+        @objective(model, Min, ∫(cgrid,t)/sum(Dt) + pDep + Wtess*∫(auxTess,t)/sum(Dt) +
+            # clossbess*∫(iloss,t)/sum(Dt))
+            clossbess*cQloss/sum(Dt))
+        # @objective(model, Max, -∫(cgrid,t)/sum(Dt) - pDep - Wtess*∫(auxTess,t)/sum(Dt) -
+        #     clossbess*cQloss/sum(Dt))
+    else
+        @objective(model, Min, ∫(cgrid,t)/sum(Dt) + pDep + Wtess*∫(auxTess,t)/sum(Dt))
+        # @objective(model, Min, ∫(cgrid,t)/sum(Dt) + pDep + Wtess*∫(auxTess,t)/sum(Dt) + cπ/sum(Dt))
+    end 
     return model;
 end;
 
@@ -460,6 +447,23 @@ function update_measurements(results::Dict, s::modelSettings, data::Dict; typeOp
     end
     return data
 end;
+
+function set_warm_start(model::InfiniteModel, preRes::Dict)
+# Warm starts the model variables with the results from the previous optimization.
+    t = model[:t];
+    # [set_start_value_function(x[i], t -> x_opt_interp[i](t)) for i ∈ 1:2]
+    # x = all_variables(model)
+    for x ∈ all_variables(model)
+        if name(x) != "" # skip point variables
+            # x_opt = preRes[name(x)][95:end]
+            # append!(x_opt, zeros(96))
+            x_opt = preRes[name(x)]
+            x_opt_interp = linear_interpolation(value.(t), x_opt, extrapolation_bc = Line())
+            set_start_value_function(x, t -> x_opt_interp(t))
+        end
+    end
+    return model
+end
 
 """
     getResults(model::InfiniteModel)
@@ -551,7 +555,9 @@ function concatResultsRH(results::Vector{Dict}; typeOpt::String="MPC")
         end
     elseif typeOpt == "day-ahead"
         # take the length from results because its the one handled by handleInfeasible()
-        shift = Int(ceil(length(results[1]["t"])/2))-1
+        # shift = Int(ceil(length(results[1]["t"])/2))-1
+        Δt = (results[1]["t"][2] - results[1]["t"][1])/3600;
+        shift = Int((24 / Δt)-1);
         for key in keys_list
             # Check if the key requires special handling and skip the "status" key
             if key == :"status" || key == :"compTime" 

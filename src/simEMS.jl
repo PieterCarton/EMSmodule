@@ -6,6 +6,7 @@
 # Version: 1.5
 # Date: 17/01/2024
 
+using LiiBRA
 
 function perfModel_matching(stgAsset::BESSData)
     if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
@@ -124,8 +125,7 @@ function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPe
     if typeOpt == "MPC"
         iSEI = (kSEI*ℯ^(-ESEI/R/Tk)) ./ (nSEI*(1 .+λ .* θ) .* .√ t[1]);
     else # typeOpt == "day-ahead"
-        # iSEI = (kSEI*ℯ^(-ESEI/R/Tk)) ./ (nSEI*(1 .+λ .* θ) .* .√ t);
-        iSEI = (kSEI*ℯ^(-ESEI/R/Tk)) ./ (nSEI*(1 .+λ .* θ) .* .√(5*8760*3600 .+ t)); # add 5 years
+        iSEI = (kSEI*ℯ^(-ESEI/R/Tk)) ./ (nSEI*(1 .+λ .* θ) .* .√ t);
     end
     # AM
     # iAM = kAM*ℯ^(-EAM/R/Tk) * SoCsa .* abs.(isa)*Qsa0*3600;
@@ -218,7 +218,7 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
 
     # Update the PBROM matrices
     SoC0 = copy(stgAsset.GenInfo.SoC0); # Starting SOC
-    SList = collect(1:-0.1:0.1) # List of SOC points for model generation
+    SList = collect(1:-0.1:0.0) # List of SOC points for model generation
     Sₑ = 4 # Spatial points in electrolyte
     Sₛ = 2 # Spatial point in solid
     # Spatial!(perfModel.Cell, Sₑ, Sₛ) # ideally we should be using this instead of Base.invokelatest(), but there is an issue with LiiBRA.jl
@@ -418,6 +418,8 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
             end
             # Sₛₐ,ₜ₊₁ = Sₛₐ,ₜᴹ(Sₛₐ,ₜ , Pₛₐ,ₜ* , Wₛₐ,ₜ₊₁)
             simulate_storage_asset!(stgAsset, results, key; typeOpt=typeOpt)
+            # adjust power setpoints if the storage has been depleted
+
         end
     end
     return results, data

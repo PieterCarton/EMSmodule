@@ -247,8 +247,9 @@ function calcFullObj(result, data, s)
     Δt=t[2]-t[1]; # time step
     t0=t[1];
     # make new time window
-    it0 = Int((t0/Δt) + 1);
+    it0 = round(Int,t0/Δt);
     itend = it0+length(t)-1;
+        
     # total cost
     # Wgrid*∫(cgrid,t)+pDep+Wloss*clossbess*∫(model[:ilossbess]/3600
     # Grid cost

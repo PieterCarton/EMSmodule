@@ -406,7 +406,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     Ereq=[sum(Pdrive[n].*(1 .-γ[n,:])*Δt)./3600 for n in 1:nEV];
     # check if the driving power is greater than the energy in the battery pack.
     while  any(Ereq .> Qev0.*Npev.*Nsev.*(aOCV.+bOCV)./1000*0.8)   
-        Pdrive = [rand(truncated(Normal(μDrive[n], σDrive[n])); lower = 0.01) for n in 1:nEV]; # Gaussian distribution
+        Pdrive = [rand(truncated(Normal(μDrive[n], σDrive[n]); lower = 0.01)) for n in 1:nEV]; # Gaussian distribution
         Ereq=[sum(Pdrive[n].*(1 .-γ[n,:])*Δt)./3600 for n in 1:nEV];
     end
     

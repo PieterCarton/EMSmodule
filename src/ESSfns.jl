@@ -402,7 +402,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     # Now we need to project it into the cont t-domain.
     γ_interp = linear_interpolation((1:nEV, Dt), γ)
     @parameter_function(model, γ_cont[n in 1:nEV] == (t) -> γ_interp(n, t)) # make InfiniteOpt compatible
-    Pdrive = [rand(truncated(Normal(μDrive[n], σDrive[n])); lower = 0.01) for n in 1:nEV]; # Gaussian distribution
+    Pdrive = [rand(truncated(Normal(μDrive[n], σDrive[n]); lower = 0.01)) for n in 1:nEV]; # Gaussian distribution
     Ereq=[sum(Pdrive[n].*(1 .-γ[n,:])*Δt)./3600 for n in 1:nEV];
     # check if the driving power is greater than the energy in the battery pack.
     while  any(Ereq .> Qev0.*Npev.*Nsev.*(aOCV.+bOCV)./1000*0.8)   

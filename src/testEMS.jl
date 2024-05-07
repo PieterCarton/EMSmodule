@@ -278,14 +278,13 @@ function calcFullObj(result, data, s)
     if length(data["EV"]) != 1
         SoCev=[result["SoCev[$n]"] for n ∈ 1:nEV];
         # departure times
-        idtdep = [findfirst(diff(γ[n,:]) .== -1) for n ∈ 1:nEV]; # time index for departure
+        idtdep = [findfirst(diff(γ[n]) .== -1) for n ∈ 1:nEV]; # time index for departure
         # tdep = [t[idtdep[n]] for n ∈ 1:nEV];
         # tdep=[data["EV"][n].driveInfo.tDep for n ∈ 1:nEV]; 
         # tdep = [tdep[n] .+ (0:length(tdep[n]) .- 1) .* 24 for n ∈ 1:nEV].*3600
         # find the day being simulated from t 
         # day = Int(floor(t[1]/(24*3600)))+1; # this assumes that the time window is smaller than a day
         # idtdep = [t.== tdep[n][day] for n ∈ 1:nEV]; # time index for departure
-        println(idtdep)
         ϵSoC=[SoCev[n][idtdep[n]].-SoCref[n] for n ∈ 1:nEV]; # SoC penalty
     else
         SoCev=result[:"SoCev[1]"];

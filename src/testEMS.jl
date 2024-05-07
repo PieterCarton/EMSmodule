@@ -262,7 +262,7 @@ function calcFullObj(result, data, s)
     # Degradation cost
     Qlossbess=result[:"Qbess"][1].-result[:"Qbess"];
     if length(data["EV"]) != 1
-        Qlossev=[result[:"Qev[$n]"][1].-result[:"Qev[$n]"] for n ∈ 1:nEV];
+        Qlossev=[result["Qev[$n]"][1].-result["Qev[$n]"] for n ∈ 1:nEV];
         Qloss = Qlossbess .+ sum(Qlossev);
     else
         Qlossev=result[:"Qev[1]"][1].-result[:"Qev[1]"];

@@ -285,6 +285,7 @@ function calcFullObj(result, data, s)
         # find the day being simulated from t 
         # day = Int(floor(t[1]/(24*3600)))+1; # this assumes that the time window is smaller than a day
         # idtdep = [t.== tdep[n][day] for n ∈ 1:nEV]; # time index for departure
+        println(idtdep)
         ϵSoC=[SoCev[n][idtdep[n]].-SoCref[n] for n ∈ 1:nEV]; # SoC penalty
     else
         SoCev=result[:"SoCev[1]"];

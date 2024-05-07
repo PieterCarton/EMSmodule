@@ -276,7 +276,7 @@ function calcFullObj(result, data, s)
     γ = result[:"γ_cont"];
     # EV SoC
     if length(data["EV"]) != 1
-        SoCev=[result[:"SoCev[$n]"] for n ∈ 1:nEV];
+        SoCev=[result["SoCev[$n]"] for n ∈ 1:nEV];
         # departure times
         idtdep = [findfirst(diff(γ[n,:]) .== -1) for n ∈ 1:nEV]; # time index for departure
         # tdep = [t[idtdep[n]] for n ∈ 1:nEV];

@@ -160,10 +160,10 @@ function makeEMSplots(results::Dict, data::Dict; backend::String="CairoMakie", f
         tb_ax = Axis(fig[2,1]; ylabel=L"$P$ [kWt]", xlabel=L"$t$ [hr]", title=L"\text{Thermal Balance}",
                 );
         stairs!(tb_ax, t/3600, gridModel.loadTh[it0:itend], color=colors[1], linewidth=1, label=L"P_{\textrm{load}}^{th}", step=:post)
-        stairs!(tb_ax, t/3600, spvModel.MPPTData[it0:itend]*EMSData["ST"].η, color=colors[2], linewidth=1, label=L"P_{\textrm{ST}}", step=:post)
+        stairs!(tb_ax, t/3600, spvModel.MPPTData[it0:itend]*data["ST"].η, color=colors[2], linewidth=1, label=L"P_{\textrm{ST}}", step=:post)
         stairs!(tb_ax, t/3600, Ptess, color=colors[3], linewidth=1, label=L"P_{\textrm{TESS}}", step=:post)
         if haskey(results, "Phpe")
-                stairs!(tb_ax, t/3600, Phpe*EMSData["HP"].η, color=colors[4], linewidth=1, label=L"P_{\textrm{HP}}^{t}", step=:post)
+                stairs!(tb_ax, t/3600, Phpe*data["HP"].η, color=colors[4], linewidth=1, label=L"P_{\textrm{HP}}^{t}", step=:post)
         end
         axislegend(tb_ax); limits!(tb_ax, t[1]/3600, t[end]/3600, nothing, nothing);
         

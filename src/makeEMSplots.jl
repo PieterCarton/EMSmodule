@@ -3,6 +3,12 @@
 # The script is called with the JSON file name con containing the data to be plotted.
 
 
+"""
+    makeInputsplot(gridModel::gridData, spvModel::SPVData)
+
+This function creates a plot with the inputs of the EMS. The plot shows the electric and thermal loads, the PV generation, and the day-ahead prices.
+The electric loads are shown in the primary y-axis, while the prices are shown in the secondary y-axis.
+"""
 function makeInputsplot(gridModel::gridData, spvModel::SPVData)
         CairoMakie.activate!(type="svg")
         set_theme!(theme_latexfonts())

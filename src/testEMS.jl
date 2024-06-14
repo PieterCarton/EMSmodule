@@ -1,5 +1,6 @@
 ### Test Solution Feasibility
 # This script tests the feasibility of the solution obtained from the EMS optimization problem.
+using LinearAlgebra
 
 function testPBalance(results::Dict, data::Dict)
     # Unwrap the result dict
@@ -247,54 +248,48 @@ function calcFullObj(result, data, s)
     Δt=t[2]-t[1]; # time step
     t0=t[1];
     # make new time window
-    it0 = round(Int,t0/Δt);
+    it0 = Int((t0/Δt) + 1);
     itend = it0+length(t)-1;
-        
     # total cost
     # Wgrid*∫(cgrid,t)+pDep+Wloss*clossbess*∫(model[:ilossbess]/3600
     # Grid cost
-    λbuy=data["grid"].λ[:,1]*1e-3/3600; # buy price
-    λsell=data["grid"].λ[:,2]*1e-3/3600; # sell price
+    λbuy=data["grid"].λ[:,1]*1e-3; # buy price [€/kWh]
+    λsell=data["grid"].λ[:,2]*1e-3; # sell price [€/kWh]
     Pgpos=result[:"PgPos"]; # positive grid power
     Pgneg=result[:"PgNeg"]; # negative grid power
-    Cgrid=cumsum(Pgpos.*λbuy[it0:itend] + Pgneg.*λsell[it0:itend]).*Δt/360;
+    Cgrid=cumsum(Pgpos.*λbuy[it0:itend] + Pgneg.*λsell[it0:itend]).*Δt/3600;
     
     # Degradation cost
     Qlossbess=result[:"Qbess"][1].-result[:"Qbess"];
     if length(data["EV"]) != 1
-        Qlossev=[result["Qev[$n]"][1].-result["Qev[$n]"] for n ∈ 1:nEV];
+        Qlossev=[result[:"Qev[$n]"][1].-result[:"Qev[$n]"] for n ∈ 1:nEV];
         Qloss = Qlossbess .+ sum(Qlossev);
     else
         Qlossev=result[:"Qev[1]"][1].-result[:"Qev[1]"];
         Qloss = Qlossbess .+ Qlossev;
     end    
-    closs = 1.2;
-    Closs = closs .* Qloss;
+    closs = 1.2; # [€/Ah]
+    Closs = closs .* Qloss; # [€]
 
     # EV charging penalty
     SoCref=[data["EV"][n].driveInfo.SoCdep for n ∈ 1:nEV]; # desired SoC
-    γ = result[:"γ_cont"];
     # EV SoC
     if length(data["EV"]) != 1
-        SoCev=[result["SoCev[$n]"] for n ∈ 1:nEV];
-        # departure times
-        idtdep = [findfirst(diff(γ[n]) .== -1) for n ∈ 1:nEV]; # time index for departure
-        # tdep = [t[idtdep[n]] for n ∈ 1:nEV];
-        # tdep=[data["EV"][n].driveInfo.tDep for n ∈ 1:nEV]; 
-        # tdep = [tdep[n] .+ (0:length(tdep[n]) .- 1) .* 24 for n ∈ 1:nEV].*3600
+        SoCev=[result[:"SoCev[$n]"] for n ∈ 1:nEV];
+        tdep=[data["EV"][n].driveInfo.tDep for n ∈ 1:nEV]; # departure times
+        tdep = [tdep[n] .+ (0:length(tdep[n]) .- 1) .* 24 for n ∈ 1:nEV].*3600
         # find the day being simulated from t 
-        # day = Int(floor(t[1]/(24*3600)))+1; # this assumes that the time window is smaller than a day
-        # idtdep = [t.== tdep[n][day] for n ∈ 1:nEV]; # time index for departure
+        day = Int(floor(t[1]/(24*3600)))+1; # this assumes that the time window is smaller than a day
+        idtdep = [t.== tdep[n][day] for n ∈ 1:nEV]; # time index for departure
         ϵSoC=[SoCev[n][idtdep[n]].-SoCref[n] for n ∈ 1:nEV]; # SoC penalty
     else
         SoCev=result[:"SoCev[1]"];
-        # tdep = [data["EV"][n].driveInfo.tDep for n ∈ 1:nEV][1]; # departure times
-        # tdep = (tdep .+ (0:length(tdep) .- 1.0) .* 24) .*3600
+        tdep=[data["EV"][n].driveInfo.tDep for n ∈ 1:nEV][1]; # departure times
+        tdep = (tdep .+ (0:length(tdep) .- 1.0) .* 24) .*3600
         # find the day being simulated from t 
-        # day = Int(floor(t[1]/(24*3600)))+1; # this assumes that the time window is smaller than a day
-        # idtdep = t.== tdep[day]; # time index for departure
-        idtdep = findfirst(diff(γ) .== -1); # time index for departure
-        ϵSoC = SoCev[idtdep] .- SoCref; # SoC penalty
+        day = Int(floor(t[1]/(24*3600)))+1; # this assumes that the time window is smaller than a day
+        idtdep = t.== tdep[day]; # time index for departure
+        ϵSoC=SoCev[idtdep] .- SoCref; # SoC penalty
     end
     
     ϵSoC=reduce(vcat,ϵSoC);
@@ -305,6 +300,6 @@ function calcFullObj(result, data, s)
                 Wgrid*Cgrid, 
                 pDep, # already weighted
                 Wloss.*Closs,
-                s.costWeights)
+                s.costWeights)  
     return summary
 end

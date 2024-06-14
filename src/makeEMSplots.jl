@@ -35,7 +35,7 @@ function makeInputsplot(gridModel::gridData, spvModel::SPVData)
         stairs!(ax2, (1:length(gridModel.λ[:,1]))./4, gridModel.λ[:,1],
                 label=L"\textrm{Day-ahead Prices [€/MWh]}", step=:post, color=colors[4])
                 # move 
-        Makie.ylims!(ax2, 0, 1.1 .* maximum(gridModel.λ[:,1]))
+        Makie.ylims!(ax2, 1.1 .* minimum(gridModel.λ[:,1]), 1.1 .* maximum(gridModel.λ[:,1]))
         axislegend(ax2; position=:rt)
         return f
 end
@@ -95,7 +95,11 @@ function makeEBplot(results::Dict, data::Dict)
         return fig
 end     
 
-function makeEMSplots(results::Dict, data::Dict; backend::String="CairoMakie", filename::String="EMSplot.pdf")
+function makeEMSplots(results::Dict, data::Dict;
+        backend::String="CairoMakie",
+        filename::String="EMSplot.pdf",
+        plot_ageing::Bool=true,
+        )
         @assert backend ∈ ["CairoMakie", "GLMakie"] "Invalid backend. Choose CairoMakie or GLMakie."
         if backend == "CairoMakie"
                 CairoMakie.activate!(type="svg")
@@ -120,21 +124,21 @@ function makeEMSplots(results::Dict, data::Dict; backend::String="CairoMakie", f
         haskey(results, "Phpe") ? Phpe = convert.(Float64, results[:"Phpe"]) : nothing
         Pbess = convert.(Float64, results[:"Pbess"])
         SoCbess = convert.(Float64, results[:"SoCbess"])
-        Qbess = convert.(Float64,  results[:"Qbess"])
-        R0bess = convert.(Float64,  results[:"R0bess"])
+        plot_ageing ? Qbess = convert.(Float64,  results[:"Qbess"]) : nothing
+        plot_ageing ? R0bess = convert.(Float64,  results[:"R0bess"]) : nothing
         nEV = length(data["EV"])
         if length(data["EV"]) !=1
                 γ_cont = results[:"γ_cont"]
                 Pev = [results[:"Pev[1]"], results[:"Pev[2]"]]
                 SoCev = [results[:"SoCev[1]"], results[:"SoCev[2]"]]
-                Qev = [convert.(Float64, results[:"Qev[1]"]), convert.(Float64, results[:"Qev[2]"])]
-                R0ev = [convert.(Float64, results[:"R0ev[1]"]), convert.(Float64, results[:"R0ev[2]"])]
+                plot_ageing ? Qev = [convert.(Float64, results[:"Qev[1]"]), convert.(Float64, results[:"Qev[2]"])] : nothing
+                plot_ageing ? R0ev = [convert.(Float64, results[:"R0ev[1]"]), convert.(Float64, results[:"R0ev[2]"])] : nothing
         else
                 γ_cont = results[:"γ_cont"][:]
                 Pev = convert.(Float64, results[:"Pev[1]"])
                 SoCev = convert.(Float64, results[:"SoCev[1]"])
-                Qev = convert.(Float64, results[:"Qev[1]"])
-                R0ev = convert.(Float64, results[:"R0ev[1]"])
+                plot_ageing ? Qev = convert.(Float64, results[:"Qev[1]"]) : nothing
+                plot_ageing ? R0ev = convert.(Float64, results[:"R0ev[1]"]) : nothing
         end
         Ptess = convert.(Float64, results[:"Ptess"])
         SoCtess = convert.(Float64, results[:"SoCtess"])
@@ -160,10 +164,10 @@ function makeEMSplots(results::Dict, data::Dict; backend::String="CairoMakie", f
         tb_ax = Axis(fig[2,1]; ylabel=L"$P$ [kWt]", xlabel=L"$t$ [hr]", title=L"\text{Thermal Balance}",
                 );
         stairs!(tb_ax, t/3600, gridModel.loadTh[it0:itend], color=colors[1], linewidth=1, label=L"P_{\textrm{load}}^{th}", step=:post)
-        stairs!(tb_ax, t/3600, spvModel.MPPTData[it0:itend]*data["ST"].η, color=colors[2], linewidth=1, label=L"P_{\textrm{ST}}", step=:post)
+        stairs!(tb_ax, t/3600, spvModel.MPPTData[it0:itend]*EMSData["ST"].η, color=colors[2], linewidth=1, label=L"P_{\textrm{ST}}", step=:post)
         stairs!(tb_ax, t/3600, Ptess, color=colors[3], linewidth=1, label=L"P_{\textrm{TESS}}", step=:post)
         if haskey(results, "Phpe")
-                stairs!(tb_ax, t/3600, Phpe*data["HP"].η, color=colors[4], linewidth=1, label=L"P_{\textrm{HP}}^{t}", step=:post)
+                stairs!(tb_ax, t/3600, Phpe*EMSData["HP"].η, color=colors[4], linewidth=1, label=L"P_{\textrm{HP}}^{t}", step=:post)
         end
         axislegend(tb_ax); limits!(tb_ax, t[1]/3600, t[end]/3600, nothing, nothing);
         
@@ -181,12 +185,27 @@ function makeEMSplots(results::Dict, data::Dict; backend::String="CairoMakie", f
                 # add a vspan for the EV availability
                 # find the indeces were γ_cont changes from 0 to 1 and viceversa
                 # arrival when γ_cont changes from 0 to 1
-                indArr = findall(x -> x == 1, diff(γ_cont))
+                iArr = findall(x -> x == 1, diff(γ_cont))
                 # departure when γ_cont changes from 1 to 0
-                indDep = findall(x -> x == -1, diff(γ_cont))
-                # check if they are the same length.
-                length(indDep) > length(indArr) ? append!(indArr, length(t)) : nothing
-                vspan!(eess_ax, t[indDep]/3600,t[indArr]/3600, ymax=100, color = (:grey, 0.2))
+                iDep = findall(x -> x == -1, diff(γ_cont))
+                
+                tDep = data["EV"][1].driveInfo.tDep;
+                tArr = data["EV"][1].driveInfo.tArr;
+                # iDep = []; iArr = [];
+                initDay = Int(floor(t[1]/3600/24)); endDay = initDay + length(t[1:96:end]);
+                # # for day ∈ 1:length(t[1:96:end])
+                # for day ∈ initDay:endDay
+                #         indDep = findmin(abs.(tDep[day] .- (Δt/3600:Δt/3600:24)))[2]
+                #         indArr = findmin(abs.(tArr[day] .- (Δt/3600:Δt/3600:24)))[2]
+                #         indDep = indDep + (day-1)*24/(Δt/3600)
+                #         indArr = indArr + (day-1)*24/(Δt/3600)
+                #         push!(iDep, indDep); push!(iArr, indArr)
+                # end
+                # # check if they are the same length.
+                iDep = Int.(iDep); iArr = Int.(iArr);
+        
+                # length(indDep) > length(indArr) ? append!(indArr, length(t)) : nothing
+                vspan!(eess_ax, t[iDep]/3600,t[iArr]/3600, ymax=100, color = (:grey, 0.2))
         end
         axislegend(eess_ax); limits!(eess_ax, t[1]/3600, t[end]/3600, 0, 100);
         
@@ -196,30 +215,32 @@ function makeEMSplots(results::Dict, data::Dict; backend::String="CairoMakie", f
                 xtickformat = values -> [L"%$(value)" for value in values]);
         stairs!(tess_ax, t/3600, SoCtess*100, color=colors[1], linewidth=1, label=L"SoC_{\textrm{TESS}}", step=:post)
         axislegend(tess_ax, position=:lt); limits!(tess_ax, t[1]/3600, t[end]/3600, nothing, nothing);
-        
-        # Ageing - ΔQₛₐ vs t, % of initial capacity
-        qloss_ax = Axis(fig[1, 3]; ylabel=L"[%]", title=L"Ageing - $ΔQ_{sa}$ vs t",
-        );
-        stairs!(qloss_ax, t/3600, (Qbess .- Qbess[1]) ./ Qbess[1] * 100, color=colors[1], linewidth=1, label=L"Q_{loss , \textrm{BESS}}", step=:post)
-        if length(data["EV"]) != 1
-                [stairs!(qloss_ax, t/3600, (Qev[n] .- Qev[n][1]) ./ Qev[n][1] * 100,
-                color=colors[1+n], linewidth=1, label=L"Q_{loss, \textrm{EV}, %$n}", step=:post) for n ∈ 1:nEV]
-        else
-                stairs!(qloss_ax, t/3600, (Qev .- Qev[1]) ./ Qev[1] * 100,
-                color=colors[1+1], linewidth=1, label=L"Q_{loss, \textrm{EV}}", step=:post)
+        if plot_ageing
+                # Ageing - ΔQₛₐ vs t, % of initial capacity
+                qloss_ax = Axis(fig[1, 3]; ylabel=L"[%]", title=L"Ageing - $ΔQ_{sa}$ vs t",
+                );
+                stairs!(qloss_ax, t/3600, (Qbess .- Qbess[1]) ./ Qbess[1] * 100, color=colors[1], linewidth=1, label=L"Q_{loss , \textrm{BESS}}", step=:post)
+                if length(data["EV"]) != 1
+                        [stairs!(qloss_ax, t/3600, (Qev[n] .- Qev[n][1]) ./ Qev[n][1] * 100,
+                        color=colors[1+n], linewidth=1, label=L"Q_{loss, \textrm{EV}, %$n}", step=:post) for n ∈ 1:nEV]
+                else
+                        stairs!(qloss_ax, t/3600, (Qev .- Qev[1]) ./ Qev[1] * 100,
+                        color=colors[1+1], linewidth=1, label=L"Q_{loss, \textrm{EV}}", step=:post)
+                end
+                axislegend(qloss_ax); limits!(qloss_ax, t[1]/3600, t[end]/3600, nothing, nothing);
+                
+                # Ageing - ΔR₀,ₛₐ vs t
+                rsa_ax = Axis(fig[2, 3]; ylabel=L"[%]", xlabel=L"$t$ [hr]", title=L"Ageing - $\Delta R_{0,sa}$ vs t");
+                stairs!(rsa_ax, t/3600, (R0bess .- R0bess[1]) ./ R0bess[1] * 100, color=colors[1], linewidth=1, label=L"R_{0,\textrm{BESS}}", step=:post)
+                if length(data["EV"]) != 1
+                        [stairs!(rsa_ax, t/3600, (Rev[n] .- R0ev[n][1]) ./ R0ev[n][1] * 100, color=colors[1+n], linewidth=1, label=L"R_{0,\textrm{EV}, %$n}", step=:post) for n ∈ 1:nEV]
+                else
+                        stairs!(rsa_ax, t/3600, (R0ev .- R0ev[1]) ./ R0ev[1] * 100, color=colors[1+1], linewidth=1, label=L"R_{0,\textrm{EV}}", step=:post)
+                end
+                axislegend(rsa_ax, position=:rb); 
+                limits!(rsa_ax, t[1]/3600, t[end]/3600, nothing, nothing);
         end
-        axislegend(qloss_ax); limits!(qloss_ax, t[1]/3600, t[end]/3600, nothing, nothing);
         
-        # Ageing - ΔR₀,ₛₐ vs t
-        rsa_ax = Axis(fig[2, 3]; ylabel=L"[%]", xlabel=L"$t$ [hr]", title=L"Ageing - $\Delta R_{0,sa}$ vs t");
-        stairs!(rsa_ax, t/3600, (R0bess .- R0bess[1]) ./ R0bess[1] * 100, color=colors[1], linewidth=1, label=L"R_{0,\textrm{BESS}}", step=:post)
-        if length(data["EV"]) != 1
-                [stairs!(rsa_ax, t/3600, (Rev[n] .- R0ev[n][1]) ./ R0ev[n][1] * 100, color=colors[1+n], linewidth=1, label=L"R_{0,\textrm{EV}, %$n}", step=:post) for n ∈ 1:nEV]
-        else
-                stairs!(rsa_ax, t/3600, (R0ev .- R0ev[1]) ./ R0ev[1] * 100, color=colors[1+1], linewidth=1, label=L"R_{0,\textrm{EV}}", step=:post)
-        end
-        axislegend(rsa_ax, position=:rb); 
-        limits!(rsa_ax, t[1]/3600, t[end]/3600, nothing, nothing);
         if backend == "CairoMakie"
                 save(filename, fig)
                 return fig
@@ -395,7 +416,13 @@ function hist2d(x, y; nbins=10, normalize=false)
         return hist, xedges, yedges
 end
 
-function countourSP(results, keys, titles)
+function countourSP(results,
+        keys,
+        titles;
+        lims = [(-4.0,4.0,0.1,1.0),
+                (-12.5,12.5,0.1,1.0),
+                (-6.0,6.0,0.1,1.0)],
+        )
 # This function creates the contour plots (SoC vs P) of the different ESS.
         i=0
         cmaps = [:algae, :reds, :blues, :balance]
@@ -408,12 +435,12 @@ function countourSP(results, keys, titles)
             i=i+1
             Pkey = "P$kk"; SoCkey = "SoC$kk";
             # Create a 2D histogram
-            histogram, xedges, yedges = hist2d(results[Pkey], results[SoCkey], nbins=60)
+            histogram, xedges, yedges = hist2d(results[Pkey], results[SoCkey], nbins=50, normalize=true)
             ax = Axis(fig[1,i], xlabel=L"P_{sa}", ylabel=L"SoC_{sa}",
-                    limits=(-10.0,10.0,0.1,0.9),
+                    limits= lims[i],
                     title = titles[i];
                     xticks = -10:2:10,
-                    yticks = 0.:0.1:0.9,
+                    yticks = 0.:0.1:1.0,
                     )
             push!(axs,ax)
             # Makie.heatmap!(ax,xedges, yedges, histogram', colormap=:viridis, xlabel="Pa", ylabel="Pb")

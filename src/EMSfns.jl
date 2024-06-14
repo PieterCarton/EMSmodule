@@ -375,8 +375,16 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     # Aging costs CHECK
     clossbess = 1.2; # cost of lost capacity EUR/Ah
     Wloss=W[3]; # regularization factor for lost capacity
-    # cQloss = Wloss != 0 ? ( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600) : 0.0;
-    cQloss = Wloss != 0 ? ∫(( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600),t) : 0.0;
+    if Wloss != 0
+        # cQloss = Wloss != 0 ? ( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600) : 0.0;
+        lossBESS = data["BESS"].GenInfo.Ns * data["BESS"].GenInfo.Np * model[:ilossbess];
+        lossEV = [data["EV"][n].carBatteryPack.GenInfo.Ns * 
+                data["EV"][n].carBatteryPack.GenInfo.Np *
+                model[:ilossev][n] for n ∈ 1:sets.nEV]
+        cQloss = ∫(( Wloss*(lossBESS+sum(lossEV[n] for n ∈ 1:sets.nEV))/3600),t);
+    else
+        cQloss = 0.0;
+    end
 
     # # Penalty for excessive actions
     # xπ = Vector{GeneralVariableRef}();
@@ -387,10 +395,13 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     # cπ = Wπ*∫(sum(xπ[i].^2 for i ∈ eachindex(xπ)),t);
 
     # Penalty/soft constraint for TESS overcharging
-    Wtess = W[4]; # penalty for TESS overcharging
+    Wlims = W[4]; # penalty for TESS overcharging
     SoCtess = model[:SoCtess]; SoCtessMax = data["TESS"].SoCLim[2];
+    # SoCbess = model[:SoCbess]; SoCbessMin = data["BESS"].GenInfo.SoCLim[1];
     @variable(model, auxTess ≥ 0, Infinite(t));
     @constraint(model, auxTess ≥ SoCtess - SoCtessMax);
+    # @variable(model, auxBess ≥ 0, Infinite(t));
+    # @constraint(model, auxBess ≥ SoCbessMin - SoCbess);
 
     # Define penalty for not charging
     WSoCDep = W[2]
@@ -398,14 +409,14 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
 
     # Define objective function
     if any(name.(all_variables(model)) .== "ilossbess")
-        @objective(model, Min, ∫(cgrid,t)/sum(Dt) + pDep + Wtess*∫(auxTess,t)/sum(Dt) +
+        @objective(model, Min, ∫(cgrid,t)/sum(Dt) + pDep + Wlims*∫(auxTess,t)/sum(Dt) +
             # clossbess*∫(iloss,t)/sum(Dt))
             clossbess*cQloss/sum(Dt))
-        # @objective(model, Max, -∫(cgrid,t)/sum(Dt) - pDep - Wtess*∫(auxTess,t)/sum(Dt) -
+        # @objective(model, Max, -∫(cgrid,t)/sum(Dt) - pDep - Wlims*∫(auxTess + auxBess,t)/sum(Dt) -
         #     clossbess*cQloss/sum(Dt))
     else
-        @objective(model, Min, ∫(cgrid,t)/sum(Dt) + pDep + Wtess*∫(auxTess,t)/sum(Dt))
-        # @objective(model, Min, ∫(cgrid,t)/sum(Dt) + pDep + Wtess*∫(auxTess,t)/sum(Dt) + cπ/sum(Dt))
+        @objective(model, Min, ∫(cgrid,t)/sum(Dt) + pDep + Wlims*∫(auxTess,t)/sum(Dt))
+        # @objective(model, Min, ∫(cgrid,t)/sum(Dt) + pDep + Wlims*∫(auxTess + auxBess,t)/sum(Dt) + cπ/sum(Dt))
     end 
     return model;
 end;
@@ -455,9 +466,14 @@ function set_warm_start(model::InfiniteModel, preRes::Dict)
     # x = all_variables(model)
     for x ∈ all_variables(model)
         if name(x) != "" # skip point variables
-            # x_opt = preRes[name(x)][95:end]
-            # append!(x_opt, zeros(96))
-            x_opt = preRes[name(x)]
+            #= # take the previous day and fill the rest with 0s
+                x_opt = preRes[name(x)][97:end]
+                println(length(x_opt))
+                append!(x_opt, zeros(96))
+            =#
+            haskey(preRes, name(x)) ? x_opt = preRes[name(x)] : x_opt = zeros(length(supports(t)))
+            length(x_opt) == length(supports(t)) ? nothing : append!(x_opt, zeros(length(supports(t))-length(x_opt)))
+            # maybe change to just repeating the same value instead of 0s
             x_opt_interp = linear_interpolation(value.(t), x_opt, extrapolation_bc = Line())
             set_start_value_function(x, t -> x_opt_interp(t))
         end
@@ -499,6 +515,12 @@ function getResults(model::InfiniteModel)
                         haskey(xdict, "Phpe") ? "Plt"=>value.(model[:Plt]) : "Plt"=>zeros(size(supports(model[:t]))),
                         "status"=>termination_status(model)))
     return xdict
+end
+function getDuals(model::InfiniteModel)
+    cs = all_constraints(model, MOI.EqualTo)
+    ddict = Dict{Any,Any}(Pair.(name.(cs), dual.(cs)))
+    sdpdict = Dict{Any,Any}(Pair.(name.(cs), shadow_price.(cs)))
+    return ddict, sdpdict
 end
 
 """

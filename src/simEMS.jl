@@ -214,11 +214,11 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     
     # The idea is to simulate the storage asset 
     # Tk = stgAsset.GenInfo.Tk; # Time constant
-    Tk = ones(size(PsaOpt))*perfModel.Cell.Const.T #Cell Temperature;
+    Tk = ones(size(PsaOpt))*perfModel.Cell.Const.T # Cell Temperature;
 
     # Update the PBROM matrices
     SoC0 = copy(stgAsset.GenInfo.SoC0); # Starting SOC
-    SList = collect(1:-0.1:0.0) # List of SOC points for model generation
+    SList = collect(1:-0.1:stgAsset.GenInfo.SoCLim[1]) # List of SOC points for model generation
     Sₑ = 4 # Spatial points in electrolyte
     Sₛ = 2 # Spatial point in solid
     # Spatial!(perfModel.Cell, Sₑ, Sₛ) # ideally we should be using this instead of Base.invokelatest(), but there is an issue with LiiBRA.jl
@@ -231,6 +231,22 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     # Calculate the transition Sₛₐ,ₜ₊₁==Sᴹ(Sₛₐ,ₜ , Pₛₐₜ*, Wₜ₊₁)
     # stgVars, ~ = Simulate(perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
     stgVars, ~ = Base.invokelatest(Simulate, perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
+
+    # check if the solution has NaNs
+    if any(isnan.(stgVars.Cell_SOC))
+        println("NaNs in the solution, $key has hit the lower SoC limit.")
+        # For the state Sₛₐ,ₜ₊₁, replace NaNs with the last valid value 
+        iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the NaNs
+        stgVars.Cell_SOC[iNaN] .= stgAsset.GenInfo.SoCLim[1];
+        stgVars.Cell_V[iNaN] .= stgAsset.GenInfo.vLim[1];
+        # for the actions replace NaNs with 0
+        iNaN = isnan.(stgVars.Iapp); # indeces of the NaNs
+        stgVars.Iapp[iNaN] .= 0;
+        PsaOpt[iNaN[1:end-1]] .= 0;
+        # update the results dictionary with PsaOpt
+        PsaOpt = 1e-3*PsaOpt * stgAsset.GenInfo.Ns * stgAsset.GenInfo.Np; # pack power in kW
+        results["P$key"] = copy(PsaOpt[1:upSampRatio:end]); # save the downsampled array
+    end
     # Update the results dictionary with the Performance Vars
     # modify the key for the EV case. Check if it is "evTot" or "evTot[$n]"
     # if it is "evTot[$n]" then we need to change it to "ev[$n]"
@@ -288,9 +304,37 @@ function simulate_storage_asset!(stgAsset::TESSData, results::Dict, key::String;
     else # typeOpt == "day-ahead"
         # easy simulation of a first order bucket model
         PsaOpt = results["P$key"][1:shift+1];
+        SoCsa = zeros(shift+1); # initialize the SoC
         SoC0 = copy(stgAsset.SoC0); # Starting SOC
+        SoCsa[1] = copy(SoC0); # initial SoC
         # easy simulation of a first order bucket model
-        results["SoC$key"] = copy(SoC0 .- cumsum(PsaOpt) .* Δt .* stgAsset.η ./ stgAsset.Q / 3600);
+        # with a check for overcharging
+        for i ∈ 2:shift+1
+            if PsaOpt[i] < 0 # when the TESS is being charged
+                # check if the TESS is being overcharged
+                if (SoCsa[i-1] .- PsaOpt[i] .* Δt .* stgAsset.η ./ stgAsset.Q / 3600) > stgAsset.SoCLim[2]
+                    # check if the TESS approaching from below or above the SoCmax
+                    if SoCsa[i-1] < stgAsset.SoCLim[2]
+                        SoCsa[i] = copy(stgAsset.SoCLim[2]); # SoCₜ₊₁ --> SoCmax
+                        # reduce the power to avoid overcharging and reach SoCmax
+                        PsaOpt[i] = (stgAsset.SoCLim[2] - SoCsa[i-1]) / Δt / stgAsset.η * stgAsset.Q * 3600;
+                    else
+                        PsaOpt[i] = 0; # reject charging
+                        SoCsa[i] = copy(SoCsa[i-1]);
+                    end
+                else
+                    SoCsa[i] = copy(SoCsa[i-1] .- PsaOpt[i] .* Δt .* stgAsset.η ./ stgAsset.Q / 3600);
+                end
+            else
+                SoCsa[i] = copy(SoCsa[i-1] .- PsaOpt[i] .* Δt .* stgAsset.η ./ stgAsset.Q / 3600);
+            end
+            # previous implementation
+            # results["SoC$key"] = copy(SoC0 .- cumsum(PsaOpt) .* Δt .* stgAsset.η ./ stgAsset.Q / 3600);
+            # Save in the results Dict
+            results["SoC$key"] = copy(SoCsa);
+            results["P$key"] = copy(PsaOpt);
+        end
+        # save the last SoC for the next initial SoC
         stgAsset.SoC0 = copy(results["SoC$key"])[end];
     end
     return stgAsset, results
@@ -418,9 +462,29 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
             end
             # Sₛₐ,ₜ₊₁ = Sₛₐ,ₜᴹ(Sₛₐ,ₜ , Pₛₐ,ₜ* , Wₛₐ,ₜ₊₁)
             simulate_storage_asset!(stgAsset, results, key; typeOpt=typeOpt)
-            # adjust power setpoints if the storage has been depleted
-
         end
+    end
+    # re-balance the power
+    # from the Thermal balance we adjust the HP
+    results["Phpe"] =  copy(Plt - Pst - results["Ptess"]) / data["HP"].η
+    # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
+    # thus we have to check if the HP power goes negative and dump it in the house
+    Qex = zeros(shift+1); # excess heat, rejected from the TESS
+    Qex[results["Phpe"] .< 0] = copy(-results["Phpe"][results["Phpe"] .< 0]) .* data["HP"].η;
+    results["Phpe"][results["Phpe"] .< 0] .= 0; # set the HP power to 0
+    results["Plt"] = copy(Plt .+ Qex); # dump the rejected heat in the house
+    # electrical re-balance with the new HP power
+    # re-extract the power of the sa (just in case we have hit the SoC limits)
+    Pev = [results["Pev[$n]"][1:shift+1] for n ∈ 1:nEV];
+    Pbess = results["Pbess"][1:shift+1];
+    if nEV != 1
+        γ_cont = [results["γ_cont"][n][1:shift+1] for n ∈ 1:nEV];
+        results["Pg"][1:shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
+            Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+    else
+        γ_cont = results["γ_cont"][1:shift+1];
+        results["Pg"][1:shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
+            Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
     end
     return results, data
 end

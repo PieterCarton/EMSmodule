@@ -23,6 +23,16 @@ Pkg> add https://gitlab.tudelft.nl/dces/emsmodule.git # main
 using EMSmodule
 ```
 
+Before connecting to the repository you must have a valid `gitlab.tudelft.nl` account and 2FA enabled with a personal access token. Once you have them you can connect to the repository and follow the steps to install the package. Gitlab will ask you for your credentials and the token in the following order:    
+```julia
+username: <your_NetIDusername>
+password: <your_NetIDpassword>
+username_again: <your_personal_access_token>
+password_again: <your_personal_access_token>
+```
+
+If you have any issues with the installation, please contact the developers.
+
 ## Usage
 
 The functions to run the EMS are in the files:

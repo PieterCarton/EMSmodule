@@ -9,7 +9,8 @@
 This function creates a plot with the inputs of the EMS. The plot shows the electric and thermal loads, the PV generation, and the day-ahead prices.
 The electric loads are shown in the primary y-axis, while the prices are shown in the secondary y-axis.
 """
-function makeInputsplot(gridModel::gridData, spvModel::SPVData)
+function makeInputsplot(gridModel::gridData, spvModel::SPVData;
+        )
         CairoMakie.activate!(type="svg")
         set_theme!(theme_latexfonts())
         f=Figure(size=(800, 400))
@@ -35,7 +36,7 @@ function makeInputsplot(gridModel::gridData, spvModel::SPVData)
         stairs!(ax2, (1:length(gridModel.λ[:,1]))./4, gridModel.λ[:,1],
                 label=L"\textrm{Day-ahead Prices [€/MWh]}", step=:post, color=colors[4])
                 # move 
-        Makie.ylims!(ax2, 1.1 .* minimum(gridModel.λ[:,1]), 1.1 .* maximum(gridModel.λ[:,1]))
+        # Makie.ylims!(ax2, 1.1 .* minimum(gridModel.λ[:,1]), 1.1 .* maximum(gridModel.λ[:,1]))
         axislegend(ax2; position=:rt)
         return f
 end

@@ -460,8 +460,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
         end
     elseif type == "ECM"
     # Model variables
-        R0ev0 = zeros(length(nEV)); R1ev = zeros(length(nEV)); tauev = zeros(length(nEV));
-        vtev0 = zeros(length(nEV)); iR1ev0 = zeros(length(nEV)); ilossev0 = zeros(length(nEV));
+        R0ev0 = zeros(nEV); R1ev = zeros(nEV); tauev = zeros(nEV);
+        vtev0 = zeros(nEV); iR1ev0 = zeros(nEV); ilossev0 = zeros(nEV);
         for n in 1:nEV
             @unpack R0Param, RParam, RCParam, iRn0, vt0 = performanceParams[n]
             R0ev0[n]=R0Param[]; R1ev[n]=RParam[]; tauev[n]=RCParam[];

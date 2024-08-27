@@ -168,7 +168,7 @@ function makeEMSplots(results::Dict, data::Dict;
         stairs!(tb_ax, t/3600, spvModel.MPPTData[it0:itend]*data["ST"].η, color=colors[2], linewidth=1, label=L"P_{\textrm{ST}}", step=:post)
         stairs!(tb_ax, t/3600, Ptess, color=colors[3], linewidth=1, label=L"P_{\textrm{TESS}}", step=:post)
         if haskey(results, "Phpe")
-                stairs!(tb_ax, t/3600, Phpe*EMSData["HP"].η, color=colors[4], linewidth=1, label=L"P_{\textrm{HP}}^{t}", step=:post)
+                stairs!(tb_ax, t/3600, Phpe*data["HP"].η, color=colors[4], linewidth=1, label=L"P_{\textrm{HP}}^{t}", step=:post)
         end
         axislegend(tb_ax); limits!(tb_ax, t[1]/3600, t[end]/3600, nothing, nothing);
         

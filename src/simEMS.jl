@@ -505,8 +505,8 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         if results["Phpe"] < 0
             Qex = copy(-results["Phpe"]) .* data["HP"].η
             results["Phpe"] .= 0; # set the HP power to 0
+            results["Plt"] = copy(Plt .+ Qex); # dump the rejected heat in the house
         end
-        results["Plt"] = copy(Plt .+ Qex); # dump the rejected heat in the house
         # electrical re-balance with the new HP power
         # re-extract the power of the sa (just in case we have hit the SoC limits)
         Pev = [results["Pev[$n]"][shift+1] for n ∈ 1:nEV];

@@ -304,7 +304,31 @@ function simulate_storage_asset!(stgAsset::TESSData, results::Dict, key::String;
         PsaOpt = results["P$key"][shift];
         SoC0 = copy(stgAsset.SoC0); # Starting SOC
         # easy simulation of a first order bucket model
-        stgAsset.SoC0 = copy(SoC0 .- PsaOpt .* Δt .* stgAsset.η ./ stgAsset.Q / 3600);
+        if PsaOpt < 0 # when the TESS is being charged
+            # check if the TESS is being overcharged
+            if (SoC0 .- PsaOpt .* Δt .* stgAsset.η ./ stgAsset.Q / 3600) > stgAsset.SoCLim[2]
+                # check if the TESS approaching from below or above the SoCmax
+                if SoCsa0 < stgAsset.SoCLim[2]
+                    SoCsa = copy(stgAsset.SoCLim[2]); # SoCₜ₊₁ --> SoCmax
+                    # reduce the power to avoid overcharging and reach SoCmax
+                    PsaOpt = (stgAsset.SoCLim[2] - SoC0) / Δt / stgAsset.η * stgAsset.Q * 3600;
+                else
+                    PsaOpt = 0; # reject charging
+                    SoCsa = copy(SoC0);
+                end
+            else
+                SoCsa = copy(SoC0 .- PsaOpt .* Δt .* stgAsset.η ./ stgAsset.Q / 3600);
+            end
+        else
+            SoCsa = copy(SoC0 .- PsaOpt .* Δt .* stgAsset.η ./ stgAsset.Q / 3600);
+        end
+        # previous implementation
+        # results["SoC$key"] = copy(SoC0 .- cumsum(PsaOpt) .* Δt .* stgAsset.η ./ stgAsset.Q / 3600);
+        # Save in the results Dict
+        results["SoC$key"] = copy(SoCsa);
+        results["P$key"] = copy(PsaOpt);
+        # save the last SoC for the next initial SoC
+        stgAsset.SoC0 = copy(SoCsa);
     else # typeOpt == "day-ahead"
         # easy simulation of a first order bucket model
         PsaOpt = results["P$key"][1:shift+1];

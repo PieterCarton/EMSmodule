@@ -500,22 +500,44 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
     results["Phpe"] =  copy(Plt - Pst - results["Ptess"]) / data["HP"].η
     # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
     # thus we have to check if the HP power goes negative and dump it in the house
-    Qex = zeros(shift+1); # excess heat, rejected from the TESS
-    Qex[results["Phpe"] .< 0] = copy(-results["Phpe"][results["Phpe"] .< 0]) .* data["HP"].η;
-    results["Phpe"][results["Phpe"] .< 0] .= 0; # set the HP power to 0
-    results["Plt"] = copy(Plt .+ Qex); # dump the rejected heat in the house
-    # electrical re-balance with the new HP power
-    # re-extract the power of the sa (just in case we have hit the SoC limits)
-    Pev = [results["Pev[$n]"][1:shift+1] for n ∈ 1:nEV];
-    Pbess = results["Pbess"][1:shift+1];
-    if nEV != 1
-        γ_cont = [results["γ_cont"][n][1:shift+1] for n ∈ 1:nEV];
-        results["Pg"][1:shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
-            Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+    if typeOpt == "MPC"
+        # excess heat, rejected from the TESS
+        if results["Phpe"] < 0
+            Qex = copy(-results["Phpe"]) .* data["HP"].η
+            results["Phpe"] .= 0; # set the HP power to 0
+        end
+        results["Plt"] = copy(Plt .+ Qex); # dump the rejected heat in the house
+        # electrical re-balance with the new HP power
+        # re-extract the power of the sa (just in case we have hit the SoC limits)
+        Pev = [results["Pev[$n]"][shift+1] for n ∈ 1:nEV];
+        Pbess = results["Pbess"][shift+1];
+        if nEV != 1
+            γ_cont = [results["γ_cont"][n][shift+1] for n ∈ 1:nEV];
+            results["Pg"][shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
+                Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+        else
+            γ_cont = results["γ_cont"][shift+1];
+            results["Pg"][shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
+                Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+        end
     else
-        γ_cont = results["γ_cont"][1:shift+1];
-        results["Pg"][1:shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
-            Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+        Qex = zeros(shift+1); # excess heat, rejected from the TESS
+        Qex[results["Phpe"] .< 0] = copy(-results["Phpe"][results["Phpe"] .< 0]) .* data["HP"].η;
+        results["Phpe"][results["Phpe"] .< 0] .= 0; # set the HP power to 0
+        results["Plt"] = copy(Plt .+ Qex); # dump the rejected heat in the house
+        # electrical re-balance with the new HP power
+        # re-extract the power of the sa (just in case we have hit the SoC limits)
+        Pev = [results["Pev[$n]"][1:shift+1] for n ∈ 1:nEV];
+        Pbess = results["Pbess"][1:shift+1];
+        if nEV != 1
+            γ_cont = [results["γ_cont"][n][1:shift+1] for n ∈ 1:nEV];
+            results["Pg"][1:shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
+                Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+        else
+            γ_cont = results["γ_cont"][1:shift+1];
+            results["Pg"][1:shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
+                Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+        end
     end
     return results, data
 end

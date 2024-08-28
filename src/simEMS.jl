@@ -494,9 +494,6 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
     end
     # re-balance the power
     # from the Thermal balance we adjust the HP
-    println("load ",typeof(Plt))
-    println("ST ",typeof(Pst))
-    println("TESS ",typeof(results["Ptess"]))
     results["Phpe"] =  copy(Plt - Pst - results["Ptess"]) / data["HP"].η
     # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
     # thus we have to check if the HP power goes negative and dump it in the house

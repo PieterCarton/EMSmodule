@@ -145,6 +145,10 @@ function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPe
     if typeOpt == "MPC"
         # ALL OF THIS SHOULD BE IN results[ts+1]
         # # Update results dictionary
+        haskey(results,"Q$key") ? results[Q_key] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
+        haskey(results,"R0$key") ? results["R0$key"] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
+        haskey(results,"δSEI$key") ? results["δSEI$key"] = copy(δSEI) : merge!(results,Dict("δSEI$key"=>copy(δSEI))); 
+        haskey(results,"εₑ$key") ? results["εₑ$key"] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
     else # typeOpt == "day-ahead"
         haskey(results,"Q$key") ? results[Q_key] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
         haskey(results,"R0$key") ? results["R0$key"] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));

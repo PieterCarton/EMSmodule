@@ -5,7 +5,7 @@ using Parameters, Random
 using JSON3, MAT, CSV, StatsBase, DataFrames, Dates, LiiBRA, GaussianMixtures,  Serialization
 using LaTeXStrings, ColorSchemes
 using XLSX, StateSpaceModels, Statistics, TimeSeries
-using Makie, CairoMakie
+using Makie, CairoMakie, GLMakie
 
 include("makeEMSobjs.jl")
 include("EMSfns.jl")

@@ -234,14 +234,14 @@ function makeEMSplots(results::Dict, data::Dict;
                 rsa_ax = Axis(fig[2, 3]; ylabel=L"[%]", xlabel=L"$t$ [hr]", title=L"Ageing - $\Delta R_{0,sa}$ vs t");
                 stairs!(rsa_ax, t/3600, (R0bess .- R0bess[1]) ./ R0bess[1] * 100, color=colors[1], linewidth=1, label=L"R_{0,\textrm{BESS}}", step=:post)
                 if length(data["EV"]) != 1
-                        [stairs!(rsa_ax, t/3600, (R0ev[n] .- R0ev[n][1]) ./ R0ev[n][1] * 100, color=colors[1+n], linewidth=1, label=L"R_{0,\textrm{EV}, %$n}", step=:post) for n ∈ 1:nEV]
+                        [stairs!(rsa_ax, t/3600, (Rev[n] .- R0ev[n][1]) ./ R0ev[n][1] * 100, color=colors[1+n], linewidth=1, label=L"R_{0,\textrm{EV}, %$n}", step=:post) for n ∈ 1:nEV]
                 else
                         stairs!(rsa_ax, t/3600, (R0ev .- R0ev[1]) ./ R0ev[1] * 100, color=colors[1+1], linewidth=1, label=L"R_{0,\textrm{EV}}", step=:post)
                 end
                 axislegend(rsa_ax, position=:rb); 
                 limits!(rsa_ax, t[1]/3600, t[end]/3600, nothing, nothing);
         end
-        
+
         if backend == "CairoMakie"
                 save(filename, fig)
                 return fig

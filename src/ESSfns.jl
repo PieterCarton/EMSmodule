@@ -967,7 +967,7 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
 
     # Extract data
     # General Info
-    @unpack PowerLim, P0, SoCLim, SoC0, ηC = data["BESS"].GenInfo
+    @unpack PowerLim, P0, SoCLim, SoC0, ηC, termCond = data["BESS"].GenInfo
     PbessMax = PowerLim[2]; # Max power [kW]
     PbessMin = PowerLim[1]; # Min power [kW]
     SoCbessMin = SoCLim[1]; # Min State of Charge [p.u.]
@@ -995,7 +995,8 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
         PbessPos ≤ (1-bPbess)*PbessMax
     end);
     
-    t1 = t0 + 6*3600
+    # t1 = t0 + 6*3600
+    t1 = t0 + termCond*3600
     # Initial conditions
     @constraints(model,begin
         SoCbess(t0) ==  SoCbess0

@@ -214,7 +214,7 @@ end
     P0::Float64 # Initial P [kW]
     SoCLim::Array{Float64} # Min-Max SoC [p.u.]
     SoC0::Float64 # Initial SoC [p.u.]
-    termCond::Float64=6 # Termination condition [p.u.]
+    termCond::Float64=6. # Termination condition [h]
     # Base parameters for performance sub-models.
     initQ::Float64 # initial cell Capacity in [Ah]
     SoHQ::Float64=1 # State of Health [p.u.]

@@ -395,7 +395,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
         # σDrive[n]=data[n].driveInfo.σDrive;
         SoCdep[n]=data[n].driveInfo.SoCdep;
         γ[n,:] = data[n].driveInfo.γ[it0:itend];
-        Pdrive[n] = data["EV"][n].driveInfo.Pdrive
+        Pdrive[n] = data[n].driveInfo.Pdrive
         # push!(tDep, data[n].driveInfo.tDep);
     end
     # tDep=vcat(tDep'...); # reorganize in a matrix

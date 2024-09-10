@@ -315,7 +315,7 @@ function pei!(model::InfiniteModel, sets::modelSettings, data::Dict) # power ele
     # Power balance DC busbar
     # If we have EVs
     if any(name.(all_variables(model)) .== "Pev[1]")
-        Pev_sum = nEV != 1 ? sum(model[:γ_cont][n].*model[:Pev][n] for n in 1:nEV) : sum(model[:γ_cont].*model[:Pev][n] for n in 1:nEV)
+        Pev_sum = nEV != 1 ? sum(model[:γf][n].*model[:Pev][n] for n in 1:nEV) : sum(model[:γf].*model[:Pev][n] for n in 1:nEV)
     else
         Pev_sum = 0
     end
@@ -504,7 +504,7 @@ function getResults(model::InfiniteModel)
     # add simulation time, EV availability and status of the solver
     merge!(xdict, Dict("t"=>supports(model[:t]),
                         # Forecasts - simulated for now
-                        "γ_cont"=>value.(model[:γ_cont]),   
+                        "γf"=>value.(model[:γf]),   
                         "PpvMPPT"=>value.(model[:PpvMPPT]),
                         "Ple"=>value.(model[:Ple]),
                         "λsell"=>value.(model[:λsell]),
@@ -550,19 +550,19 @@ function concatResultsRH(results::Vector{Dict}; typeOpt::String="MPC")
             # Check if the key requires special handling and skip the "status" key
             if key == :"status" || key == :"compTime" 
                 continue
-            elseif key == :"γ_cont"
-                # check nEV (number of EVs) to see if we need to handle the γ_cont differently
-                if size(results[1]["γ_cont"],1) == length(results[1]["t"]) 
+            elseif key == :"γf"
+                # check nEV (number of EVs) to see if we need to handle the γf differently
+                if size(results[1]["γf"],1) == length(results[1]["t"]) 
                     # only one EV
-                    # γ_cont = [results[st][key][shift+1] for st in 1:steps];
-                    γ_cont = [results[st][key][shift] for st in 1:steps];
+                    # γf = [results[st][key][shift+1] for st in 1:steps];
+                    γf = [results[st][key][shift] for st in 1:steps];
                 else
-                    nEV = size(results[1]["γ_cont"],1)
-                    # γ_cont = [[results[st][key][n][shift+1] for n ∈ 1:nEV] for st in 1:steps];
-                    γ_cont = [[results[st][key][n][shift] for n ∈ 1:nEV] for st in 1:steps];
-                    # γ_cont = [[results[st][key][1][2], results[st][key][2][2]] for st in 1:steps];
+                    nEV = size(results[1]["γf"],1)
+                    # γf = [[results[st][key][n][shift+1] for n ∈ 1:nEV] for st in 1:steps];
+                    γf = [[results[st][key][n][shift] for n ∈ 1:nEV] for st in 1:steps];
+                    # γf = [[results[st][key][1][2], results[st][key][2][2]] for st in 1:steps];
                 end
-                RHdict[key] = hcat(γ_cont...)
+                RHdict[key] = hcat(γf...)
             else
                 # For other keys, use the original approach
                 # hardcoding the shift for now just in case
@@ -584,20 +584,20 @@ function concatResultsRH(results::Vector{Dict}; typeOpt::String="MPC")
             # Check if the key requires special handling and skip the "status" key
             if key == :"status" || key == :"compTime" 
                 continue
-            elseif key == :"γ_cont"
+            elseif key == :"γf"
                 #=
-                # γ_cont = [[results[st][key][1][1:shift+1], results[st][key][2][1:shift+1]] for st in 1:steps];
-                # RHdict[key] = hcat(γ_cont...)
+                # γf = [[results[st][key][1][1:shift+1], results[st][key][2][1:shift+1]] for st in 1:steps];
+                # RHdict[key] = hcat(γf...)
                 =#
-                if size(results[1]["γ_cont"],1) == length(results[1]["t"]) 
+                if size(results[1]["γf"],1) == length(results[1]["t"]) 
                     # only one EV
-                    # γ_cont = [results[st][key][shift+1] for st in 1:steps];
-                    γ_cont = vcat([results[st][key][1:shift+1] for st in 1:steps]...);
+                    # γf = [results[st][key][shift+1] for st in 1:steps];
+                    γf = vcat([results[st][key][1:shift+1] for st in 1:steps]...);
                 else
-                    nEV = size(results[1]["γ_cont"],1)
-                    γ_cont = [vcat([results[st][key][n][1:shift+1] for st ∈ 1:steps]...) for n ∈ 1:nEV]
+                    nEV = size(results[1]["γf"],1)
+                    γf = [vcat([results[st][key][n][1:shift+1] for st ∈ 1:steps]...) for n ∈ 1:nEV]
                 end
-                RHdict[key] = γ_cont
+                RHdict[key] = γf
             else
                 # For other keys, use the original approach
                 RHdict[key] = vcat([results[st][key][1:shift+1] for st in 1:steps]...);

@@ -461,10 +461,44 @@ end
 end
 
 # EV data
+function rejCriteriaEnergy(μDrive, σDrive, tDep, tArr, Tconn, Ns, Np, vmax, Q0, chgPmax)
+    Pdrive = rand(truncated(Normal(μDrive, σDrive); lower = 0.01), length(tDep));
+    Ereq = Pdrive .* (tArr .- tDep) # energy required for each session [kWh]
+    Emax = chgPmax .* Tconn # max energy that can be charged [kWh]
+    Eev = Ns .* Np .* vmax .* Q0 .* 1e-3 * 0.8 # 80% energy of the EV battery [kWh]
+    # Check if the energy required is less than the max energy that can be charged
+    # if not adjust the demanded Pdrive
+    for i ∈ eachindex(Ereq)
+        if Ereq[i] > Emax[i] || Ereq[i] > Eev
+            # pick the lowest bound between charger and EV battery
+            println("Energy required for session $i is too high")
+            if Emax[i] < Eev
+                # adjust the power to the max that can be charged
+                println("Adjusting power to the max that can be charged")
+                println("From $(Ereq[i]) kWh to $(Emax[i]) kWh")
+                Pdrive[i] = Emax[i] / (tArr[i] - tDep[i])
+
+            else
+                println("Adjusting power to the max that can be charged")
+                println("From $(Ereq[i]) kWh to $(Eev) kWh")
+                Pdrive[i] = Eev / (tArr[i] - tDep[i])
+            end
+        end
+    end
+    return Pdrive, Ereq, Emax
+end
 # EV availability modeling function
 function availabilityEV(ns, # number of samples
-                        fs, # samples per hour
-                        )
+    fs::Int64 = 4, # samples per hour
+    μDrive::Float64 = 3.5, # mean of Pdrive [kW]
+    σDrive::Float64 = 1.5, # standard dev. of Pdrive [kW]
+    Ns::Int64 = 100, # number of series cells
+    Np::Int64 = 25, # number of parallel Branches
+    vmax::Float64 = 4.2, # max voltage [V]
+    Q0::Float64 = 5.2, # initial capacity [Ah]
+    chgPmax::Float64 = 17.5, # EV charger limits [kW]
+    type::String = "det", # type of availability
+    )
     ndays=Int(floor(ns/fs/24)); # number of days
 
     # First, we create availability vectors for each EV in the disc t-domain.
@@ -475,7 +509,7 @@ function availabilityEV(ns, # number of samples
 
     # using the data from Elaadusing Serialization
     # Deserialize the mixture model
-    open("../data/gmmElaadFit.dat", "r") do f
+    open("../data/gmmElaadFit.dat", "r") do f 
         global gmm = deserialize(f) # Gaussian Mixture Model
     end
     # load the lookup table of the connection times
@@ -486,10 +520,12 @@ function availabilityEV(ns, # number of samples
     # add a column with the arrival time in hs
     μtCon_tarr_df.tArr = collect(0:0.5:23.5)
     gmmt = truncated(gmm, 0, 23.5) # truncate the GMM to the limits
-    tArr = rand(gmmt, ndays+1)
-
-    # # Resample arrival times if outside the limits
-    # tArr = [(t > 23.5 || t < 0 ? rand(gmm) : t) for t in tArr]
+    # get the median of the GMM
+    if type == "mean"
+        tArr  = [mean(gmm) for i ∈ 1:(ndays+1)]
+    else
+        tArr = rand(gmmt, ndays+1)
+    end
 
     # Interpolate mean session length for arrival times
     tCon_interp = linear_interpolation(μtCon_tarr_df.tArr, μtCon_tarr_df.home)
@@ -505,6 +541,7 @@ function availabilityEV(ns, # number of samples
     # Ensure departure time is before arrival time and not 0
     tDep = [t == 0 ? 0.5 : t for t in tDep]
     tArr = [tDep[i] > t ? tDep[i] + 1.0 : t for (i, t) in enumerate(tArr)]
+
     # Create the availability signal
     for day in 1:ndays
         # Determine the time indices corresponding to arrival and departure for this day
@@ -515,8 +552,6 @@ function availabilityEV(ns, # number of samples
         # modify the index to be in the range of the time series, to avoid modifying supports
         tDep[day] = t[depIdx]
         tArr[day] = t[arrIdx]
-        # depIdx = findfirst(x -> x >= tDep[day], t)
-        # arrIdx = findfirst(x -> x >= tArr[day], t)
         # Correct for the day
         depIdx = depIdx + (day-1)*24*fs
         arrIdx = arrIdx + (day-1)*24*fs
@@ -525,7 +560,17 @@ function availabilityEV(ns, # number of samples
             γ[depIdx:arrIdx] .= 0
         end
     end
-    return γ, tDep, tArr;
+    # Since we removed the the first element of tArr, 
+    # the session length is the same as the first tDep append
+    # the first element of tDep in the first position of Tconn
+    # Tconn = [tDep[1]; Tconn]; Tconn = Tconn[1:end-1];
+    Tconn = [24. + tDep[i] - tArr[i-1] for i ∈ 2:ndays]
+    Tconn = [tDep[1]; Tconn]
+
+    # Create the driving signal
+    Pdrive, Ereq, Emax = rejCriteriaEnergy(μDrive, σDrive, tDep, tArr, Tconn, Ns, Np, vmax, Q0, chgPmax)
+
+    return γ, tDep, tArr, Pdrive, Tconn, Ereq, Emax;
 end
 
 @with_kw mutable struct driveData

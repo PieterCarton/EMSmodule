@@ -422,7 +422,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     depIdx = [findfirst(diff(γ[n,:]) .== -1) for n ∈ 1:nEV];
     model[:ϵSoC]=[]; # assign name in the model
     tDep = [Dt[depIdx[n]] for n ∈ 1:nEV] # departure time
-    model[:ϵSoC] = [SoCev[n](tDep[n])/Eev0[n] - SoCdep[n] for n ∈ 1:nEV];
+    model[:ϵSoC] = [SoCev[n](tDep[n]) - SoCdep[n] for n ∈ 1:nEV];
     # for day in eachindex(tDep[1,:]) # if there's more than one day loop over them
     #     for n in 1:nEV # loop over the EVs
     #         td = tDep[n, day] # pick value

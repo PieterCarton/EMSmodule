@@ -574,18 +574,14 @@ function availabilityEV(ns, # number of samples
 end
 
 @with_kw mutable struct driveData
-# Driving info
+    # Driving info
     # Consumed power
-    μDrive::Float64 # mean of Pdrive [kW]
-    σDrive::Float64 # standard dev. of Pdrive [kW]
+    Pdrive::Vector{Float64} # matrix of power consumption ℝ^{days}
     # arrival and departure times
-    # for uniform distributions
-    depLims::Array
-    arrLims::Array
     SoCdep::Float64 # desired SoC for departure [p.u.]
-    γ::Array # array of availability of the EV
-    tDep::Vector{Float64} # array of availability of the EV
-    tArr::Vector{Float64} # array of availability of the EV
+    γ::Vector{Float64} # matrix of availability of the EV ℝ^{t}.
+    tDep::Vector{Float64} # matrix of departure times ℝ^{days}
+    tArr::Vector{Float64} # matrix of arrival times ℝ^{days}
 end
 
 @with_kw mutable struct EVData <: StorageAssetData

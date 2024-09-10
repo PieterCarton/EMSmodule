@@ -3,9 +3,9 @@
 # The functions include different models for battery performance and aging.
 #
 # By: Darío Slaifstein, PhD-student @TU Delft, DCES.
-# Branch: agingModeling
+# Branch: RFO_ITEC2024
 # Version: 1.0
-# Date: 24/02/2023
+# Date: 10/09/2024
 
 
 function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
@@ -443,8 +443,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
             vmin[n] ≤ OCVev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t),(start=OCVev0[n]) # open circuit voltage of the cell
             iev[1:nEV], Infinite(t)  # current per branch 
         end);
-    # Initial conditions
-    
+    # Initial conditions   
     # Model constraints
        @constraints(model, begin
            availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance

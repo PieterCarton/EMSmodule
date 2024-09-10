@@ -6,8 +6,6 @@
 # Version: 1.5
 # Date: 17/01/2024
 
-using LiiBRA
-
 function perfModel_matching(stgAsset::BESSData)
     if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
         perfModel = stgAsset.PerfParameters

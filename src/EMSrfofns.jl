@@ -11,10 +11,7 @@
 
 ## Modeling functions
 # These functions are used to build the EMS model object. They include the device models, the grid balances and cost function.
-# cd(@__DIR__)
-using Parameters, Serialization
-# using EMSmodule
-# import EMSmodule.availabilityEV
+
 ################ TYPE DEFINITION ################
 @with_kw mutable struct modelSettingsRFO # structure of sets
     nEV::Int64 # number of EVs

@@ -359,6 +359,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     # it0 = round(Int,(t0/Δt) + 1);
     it0 = round(Int,(t0/Δt));
     itend = it0+length(Dt)-1;
+    # calculate in which day is it0
+    day = ceil(Int, it0/length(Dt)*365);
     bPev = model[:bPev];
 
     Npev = zeros(nEV,1); Nsev = zeros(nEV,1);
@@ -395,7 +397,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
         # σDrive[n]=data[n].driveInfo.σDrive;
         SoCdep[n]=data[n].driveInfo.SoCdep;
         γ[n,:] = data[n].driveInfo.γ[it0:itend];
-        Pdrive[n] = data[n].driveInfo.Pdrive
+        Pdrive[n] = data[n].driveInfo.Pdrive[day]
         # push!(tDep, data[n].driveInfo.tDep);
     end
     # tDep=vcat(tDep'...); # reorganize in a matrix

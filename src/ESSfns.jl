@@ -387,7 +387,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     # Driving consumption
     # μDrive=zeros(nEV,1);
     # σDrive=zeros(nEV,1);
-    γ=zeros(length(nEV),length(Dt));
+    γ=zeros(nEV,length(Dt));
     # tDep=[];
     SoCdep = zeros(nEV)
     Pdrive = zeros(nEV)

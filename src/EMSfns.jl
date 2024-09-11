@@ -410,7 +410,7 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     # Define penalty for not charging
     WSoCDep = W[2]
     pDep = (any(name.(all_variables(model)) .== "Pev[1]") ?
-            0. : WSoCDep*sum(model[:ϵSoC][n]^2 for n ∈ eachindex(model[:ϵSoC])))
+            WSoCDep*sum(model[:ϵSoC][n]^2 for n ∈ eachindex(model[:ϵSoC])) : 0);
 
     # Define objective function
     if any(name.(all_variables(model)) .== "ilossbess")

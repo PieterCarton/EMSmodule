@@ -68,10 +68,10 @@ function makeEBplot(results::Dict, data::Dict)
         # EV
         nEV = length(data["EV"])
         if length(data["EV"]) !=1
-                γ_cont = results[:"γ_cont"]
+                γf = results[:"γf"]
                 Pev = convert.(Vector{Float64}, [results[:"Pev[1]"], results[:"Pev[2]"]]);
         else
-                γ_cont = results[:"γ_cont"][:]
+                γf = results[:"γf"][:]
                 Pev = convert.(Float64, results[:"Pev[1]"])
         end
         
@@ -85,9 +85,9 @@ function makeEBplot(results::Dict, data::Dict)
         stairs!(ax, t/3600, Pbess, label=L"P_{\textrm{BESS}}", step=:post, color=colors[5], linewidth=1.5)
         # if haskey(results, "Pev[1]")
         if length(data["EV"]) != 1
-                [stairs!(ax, t/3600, Pev[n] .* γ_cont[n],color=colors[5+n], linewidth=1, label=L"P_{\textrm{EV}, %$n}") for n ∈ 1:nEV]
+                [stairs!(ax, t/3600, Pev[n] .* γf[n],color=colors[5+n], linewidth=1, label=L"P_{\textrm{EV}, %$n}") for n ∈ 1:nEV]
         else
-                [stairs!(ax, t/3600, Pev .* γ_cont,color=colors[5+n], linewidth=1, label=L"P_{\textrm{EV}, %$n}") for n ∈ 1:nEV]
+                [stairs!(ax, t/3600, Pev .* γf,color=colors[5+n], linewidth=1, label=L"P_{\textrm{EV}, %$n}") for n ∈ 1:nEV]
         end
         axislegend(ax; position=:rt); limits!(ax, t[1]/3600, t[end]/3600, nothing, nothing);
         # ylabel!(ax, L"P\ [kW]");
@@ -129,13 +129,13 @@ function makeEMSplots(results::Dict, data::Dict;
         plot_ageing ? R0bess = convert.(Float64,  results[:"R0bess"]) : nothing
         nEV = length(data["EV"])
         if length(data["EV"]) !=1
-                γ_cont = results[:"γ_cont"]
+                γf = results[:"γf"]
                 Pev = [results[:"Pev[1]"], results[:"Pev[2]"]]
                 SoCev = [results[:"SoCev[1]"], results[:"SoCev[2]"]]
                 plot_ageing ? Qev = [convert.(Float64, results[:"Qev[1]"]), convert.(Float64, results[:"Qev[2]"])] : nothing
                 plot_ageing ? R0ev = [convert.(Float64, results[:"R0ev[1]"]), convert.(Float64, results[:"R0ev[2]"])] : nothing
         else
-                γ_cont = results[:"γ_cont"][:]
+                γf = results[:"γf"][:]
                 Pev = convert.(Float64, results[:"Pev[1]"])
                 SoCev = convert.(Float64, results[:"SoCev[1]"])
                 plot_ageing ? Qev = convert.(Float64, results[:"Qev[1]"]) : nothing
@@ -155,9 +155,9 @@ function makeEMSplots(results::Dict, data::Dict;
         end
         stairs!(eb_ax, t/3600, Pbess, color=colors[5], linewidth=1.5, label=L"P_{\textrm{BESS}}", step=:post)
         if length(data["EV"]) != 1
-                [stairs!(eb_ax, t/3600, Pev[n] .* γ_cont[n], color=colors[5+n], linewidth=1.5, label=L"P_{\textrm{EV}, %$n}", step=:post) for n ∈ 1:nEV]
+                [stairs!(eb_ax, t/3600, Pev[n] .* γf[n], color=colors[5+n], linewidth=1.5, label=L"P_{\textrm{EV}, %$n}", step=:post) for n ∈ 1:nEV]
         else
-                stairs!(eb_ax, t/3600, Pev .* γ_cont, color=colors[6], linewidth=1.5, label=L"P_{\textrm{EV}}", step=:post)
+                stairs!(eb_ax, t/3600, Pev .* γf, color=colors[6], linewidth=1.5, label=L"P_{\textrm{EV}}", step=:post)
         end
         axislegend(eb_ax, position=:lt); limits!(eb_ax, t[1]/3600, t[end]/3600, nothing, nothing);
         
@@ -178,17 +178,17 @@ function makeEMSplots(results::Dict, data::Dict;
                 xtickformat = values -> [L"%$(value)" for value in values]);
         stairs!(eess_ax, t/3600, SoCbess*100, color=colors[1], linewidth=1, label=L"SoC_{\textrm{BESS}}", step=:post)
         if length(data["EV"]) != 1
-                [stairs!(eess_ax, t/3600, SoCev[n] .* γ_cont[n] * 100, 
+                [stairs!(eess_ax, t/3600, SoCev[n] .* γf[n] * 100, 
                 color=colors[1+n], linewidth=1, label=L"SoC_{\textrm{EV}, %$n}", step=:post) for n ∈ 1:nEV]
         else
-                stairs!(eess_ax, t/3600, SoCev .* γ_cont .* 100, 
+                stairs!(eess_ax, t/3600, SoCev .* γf .* 100, 
                 color=colors[1+1], linewidth=1, label=L"SoC_{\textrm{EV}}", step=:post)
                 # add a vspan for the EV availability
-                # find the indeces were γ_cont changes from 0 to 1 and viceversa
-                # arrival when γ_cont changes from 0 to 1
-                iArr = findall(x -> x == 1, diff(γ_cont))
-                # departure when γ_cont changes from 1 to 0
-                iDep = findall(x -> x == -1, diff(γ_cont))
+                # find the indeces were γf changes from 0 to 1 and viceversa
+                # arrival when γf changes from 0 to 1
+                iArr = findall(x -> x == 1, diff(γf))
+                # departure when γf changes from 1 to 0
+                iDep = findall(x -> x == -1, diff(γf))
                 
                 tDep = data["EV"][1].driveInfo.tDep;
                 tArr = data["EV"][1].driveInfo.tArr;
@@ -281,10 +281,10 @@ function compareEB(results::Vector{Dict}, data::Dict)
                 # EV
                 nEV = length(data["EV"])
                 if length(data["EV"]) !=1
-                        γ_cont = result[:"γ_cont"]
+                        γf = result[:"γf"]
                         Pev = convert.(Vector{Float64}, [result[:"Pev[1]"], result[:"Pev[2]"]]);
                 else
-                        γ_cont = result[:"γ_cont"][:]
+                        γf = result[:"γf"][:]
                         Pev = convert.(Float64, result[:"Pev[1]"])
                 end
 
@@ -310,14 +310,14 @@ function compareEB(results::Vector{Dict}, data::Dict)
                 stairs!(ax,t[1]/3600,convert.(Float64, Pbess[1]), step=:post, label=L"P_{\textrm{BESS}}",
                         linewidth=2, color=colors[5])
                 if size(data["EV"],2) != 1
-                        [stairs!(ax, t/3600, Pev[n].*γ_cont[n], label=L"P_{\textrm{EV}, %$n}", 
+                        [stairs!(ax, t/3600, Pev[n].*γf[n], label=L"P_{\textrm{EV}, %$n}", 
                                 step=:post, linestyle=:dash, linewidth=0.5, color=colors[5+n]) for n ∈ 1:nEV]
-                        [stairs!(ax, t[1]/3600, Pev[n][1].*γ_cont[n][1], label=L"P_{\textrm{EV}, %$n}",
+                        [stairs!(ax, t[1]/3600, Pev[n][1].*γf[n][1], label=L"P_{\textrm{EV}, %$n}",
                                 step=:post, linewidth=2, color=colors[5+n]) for n ∈ 1:nEV]
                 else
-                        [stairs!(ax, t/3600, Pev.*γ_cont, label=L"P_{\textrm{EV}, %$n}", 
+                        [stairs!(ax, t/3600, Pev.*γf, label=L"P_{\textrm{EV}, %$n}", 
                                 step=:post, linestyle=:dash, linewidth=0.5, color=colors[5+n]) for n ∈ 1:nEV]
-                        [stairs!(ax, t[1]/3600, Pev[1].*γ_cont[1], label=L"P_{\textrm{EV}, %$n}",
+                        [stairs!(ax, t[1]/3600, Pev[1].*γf[1], label=L"P_{\textrm{EV}, %$n}",
                                 step=:post, linewidth=2, color=colors[5+n]) for n ∈ 1:nEV]
                 end
 
@@ -348,13 +348,13 @@ function compareEMSplots(results::Dict)
             step=:post, color=colors[1], linewidth=4)
         stairs!(ax, BNoDeg["t"]/3600, BNoDeg["SoCbess"].*100, label=L"\textrm{BNoDeg}", 
             step=:post, color=colors[1], linestyle=:dash)
-        stairs!(ax, CEmpDeg["t"]/3600, CEmpDeg["SoCev[1]"].*100 .*CEmpDeg["γ_cont"][1], label=L"\textrm{EV 1 - CEmpDeg}",
+        stairs!(ax, CEmpDeg["t"]/3600, CEmpDeg["SoCev[1]"].*100 .*CEmpDeg["γf"][1], label=L"\textrm{EV 1 - CEmpDeg}",
              step=:post, color=colors[2], linewidth=4)
-        stairs!(ax, BNoDeg["t"]/3600, BNoDeg["SoCev[1]"].*100 .*BNoDeg["γ_cont"][1], label=L"\textrm{BNoDeg}",
+        stairs!(ax, BNoDeg["t"]/3600, BNoDeg["SoCev[1]"].*100 .*BNoDeg["γf"][1], label=L"\textrm{BNoDeg}",
              step=:post, color=colors[2], linestyle=:dash)
-        stairs!(ax, CEmpDeg["t"]/3600, CEmpDeg["SoCev[2]"].*100 .*CEmpDeg["γ_cont"][2], label=L"\textrm{EV 2 - CEmpDeg}",
+        stairs!(ax, CEmpDeg["t"]/3600, CEmpDeg["SoCev[2]"].*100 .*CEmpDeg["γf"][2], label=L"\textrm{EV 2 - CEmpDeg}",
              step=:post, color=colors[3], linewidth=4)
-        stairs!(ax, BNoDeg["t"]/3600, BNoDeg["SoCev[2]"].*100 .*BNoDeg["γ_cont"][2], label=L"\textrm{BNoDeg}",
+        stairs!(ax, BNoDeg["t"]/3600, BNoDeg["SoCev[2]"].*100 .*BNoDeg["γf"][2], label=L"\textrm{BNoDeg}",
              step=:post, color=colors[3], linestyle=:dash)
         axislegend(ax, position=:rt);
         # ylims!(ax, 0, 100);

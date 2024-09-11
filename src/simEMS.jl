@@ -416,13 +416,13 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         results["Ptess"][shift+1] =  copy(Plt - Pst - Phpe .* data["HP"].η)
         # and from the electrical one the grid
         if nEV != 1
-            γ_cont = [results["γ_cont"][n][shift+1] for n ∈ 1:nEV];
+            γf = [results["γf"][n][shift+1] for n ∈ 1:nEV];
             results["Pg"][shift+1] = copy(Ple + copy(results["Phpe"][shift+1]) - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
-            γ_cont = results["γ_cont"][shift+1];
+            γf = results["γf"][shift+1];
             results["Pg"][shift+1] = copy(Ple + copy(results["Phpe"][shift+1]) - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
     else # typeOpt == "day-ahead"
         # First, we get the optimal decisions from our policy function.
@@ -445,13 +445,13 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         results["Ptess"] =  copy(Plt - Pst - Phpe .* data["HP"].η)
         # and from the electrical one the grid
         if nEV != 1
-            γ_cont = [results["γ_cont"][n][1:shift+1] for n ∈ 1:nEV];
+            γf = [results["γf"][n][1:shift+1] for n ∈ 1:nEV];
             results["Pg"][1:shift+1] = copy(Ple + Phpe - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
-            γ_cont = results["γ_cont"][1:shift+1];
+            γf = results["γf"][1:shift+1];
             results["Pg"][1:shift+1] = copy(Ple + Phpe - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
         
     end
@@ -507,13 +507,13 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         Pev = [results["Pev[$n]"][shift+1] for n ∈ 1:nEV];
         Pbess = results["Pbess"][shift+1];
         if nEV != 1
-            γ_cont = [results["γ_cont"][n][shift+1] for n ∈ 1:nEV];
+            γf = [results["γf"][n][shift+1] for n ∈ 1:nEV];
             results["Pg"][shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
-            γ_cont = results["γ_cont"][shift+1];
+            γf = results["γf"][shift+1];
             results["Pg"][shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
     else
         Qex = zeros(shift+1); # excess heat, rejected from the TESS
@@ -525,13 +525,13 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         Pev = [results["Pev[$n]"][1:shift+1] for n ∈ 1:nEV];
         Pbess = results["Pbess"][1:shift+1];
         if nEV != 1
-            γ_cont = [results["γ_cont"][n][1:shift+1] for n ∈ 1:nEV];
+            γf = [results["γf"][n][1:shift+1] for n ∈ 1:nEV];
             results["Pg"][1:shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
-            γ_cont = results["γ_cont"][1:shift+1];
+            γf = results["γf"][1:shift+1];
             results["Pg"][1:shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
     end
     return results, data

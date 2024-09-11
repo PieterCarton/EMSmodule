@@ -375,7 +375,7 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     # Aging costs CHECK
     clossbess = 1.2; # cost of lost capacity EUR/Ah
     Wloss=W[3]; # regularization factor for lost capacity
-    if Wloss != 0
+    if Wloss != 0.
         # cQloss = Wloss != 0 ? ( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600) : 0.0;
         lossBESS = data["BESS"].GenInfo.Ns * data["BESS"].GenInfo.Np * model[:ilossbess];
         if any(name.(all_variables(model)) .== "ilossev[1]")
@@ -402,14 +402,15 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     Wlims = W[4]; # penalty for TESS overcharging
     SoCtess = model[:SoCtess]; SoCtessMax = data["TESS"].SoCLim[2];
     # SoCbess = model[:SoCbess]; SoCbessMin = data["BESS"].GenInfo.SoCLim[1];
-    @variable(model, auxTess ≥ 0, Infinite(t));
+    @variable(model, auxTess ≥ 0., Infinite(t));
     @constraint(model, auxTess ≥ SoCtess - SoCtessMax);
     # @variable(model, auxBess ≥ 0, Infinite(t));
     # @constraint(model, auxBess ≥ SoCbessMin - SoCbess);
 
     # Define penalty for not charging
     WSoCDep = W[2]
-    pDep = (isempty(model[:ϵSoC]) ? 0 : WSoCDep*sum(model[:ϵSoC][n]^2 for n ∈ eachindex(model[:ϵSoC])))
+    pDep = (any(name.(all_variables(model)) .== "Pev[1]") ?
+            0. : WSoCDep*sum(model[:ϵSoC][n]^2 for n ∈ eachindex(model[:ϵSoC])))
 
     # Define objective function
     if any(name.(all_variables(model)) .== "ilossbess")

@@ -378,9 +378,13 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     if Wloss != 0
         # cQloss = Wloss != 0 ? ( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600) : 0.0;
         lossBESS = data["BESS"].GenInfo.Ns * data["BESS"].GenInfo.Np * model[:ilossbess];
-        lossEV = [data["EV"][n].carBatteryPack.GenInfo.Ns * 
-                data["EV"][n].carBatteryPack.GenInfo.Np *
-                model[:ilossev][n] for n ∈ 1:sets.nEV]
+        if any(name.(all_variables(model)) .== "ilossev[1]")
+            lossEV = [data["EV"][n].carBatteryPack.GenInfo.Ns * 
+                    data["EV"][n].carBatteryPack.GenInfo.Np *
+                    model[:ilossev][n] for n ∈ 1:sets.nEV]
+        else
+            lossEV = zeros(sets.nEV);
+        end
         cQloss = ∫(( Wloss*(lossBESS+sum(lossEV[n] for n ∈ 1:sets.nEV))/3600),t);
     else
         cQloss = 0.0;

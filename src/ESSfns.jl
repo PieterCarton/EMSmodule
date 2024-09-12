@@ -1008,7 +1008,7 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
     # Initial conditions
     @constraints(model,begin
         SoCbess(t0) ==  SoCbess0
-        SoCbess(t1) ==  SoCbess(t1+24*3600) # periodic condition
+        SoCbess(t1) ==  SoCbess(t1+24*3600-Δt) # periodic condition
     end);
     
     model=add_battPerf(model, sets, data["BESS"]) # Operation model

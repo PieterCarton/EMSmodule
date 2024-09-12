@@ -509,7 +509,7 @@ function getResults(model::InfiniteModel)
     # add simulation time, EV availability and status of the solver
     merge!(xdict, Dict("t"=>supports(model[:t]),
                         # Forecasts - simulated for now
-                        "γf"=>value.(model[:γf]),   
+                        haskey(xdict, "γf") ? "γf"=>value.(model[:γf]) : "γf"=>zeros(size(supports(model[:t]))),   
                         "PpvMPPT"=>value.(model[:PpvMPPT]),
                         "Ple"=>value.(model[:Ple]),
                         "λsell"=>value.(model[:λsell]),

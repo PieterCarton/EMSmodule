@@ -477,7 +477,14 @@ function set_warm_start(model::InfiniteModel, preRes::Dict)
                 append!(x_opt, zeros(96))
             =#
             haskey(preRes, name(x)) ? x_opt = preRes[name(x)] : x_opt = zeros(length(supports(t)))
-            length(x_opt) == length(supports(t)) ? nothing : append!(x_opt, zeros(length(supports(t))-length(x_opt)))
+            # length(x_opt) == length(supports(t)) ? nothing : append!(x_opt, zeros(length(supports(t))-length(x_opt)))
+            if length(x_opt) != length(supports(t))
+                if length(x_opt) > length(supports(t))
+                    x_opt = x_opt[1:length(supports(t))]
+                else # length(x_opt) < length(supports(t))
+                    append!(x_opt, zeros(length(supports(t))-length(x_opt)))
+                end
+            end
             # maybe change to just repeating the same value instead of 0s
             x_opt_interp = linear_interpolation(value.(t), x_opt, extrapolation_bc = Line())
             set_start_value_function(x, t -> x_opt_interp(t))

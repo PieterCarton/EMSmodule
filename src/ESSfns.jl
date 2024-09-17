@@ -229,42 +229,52 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
     @unpack type=data.carBatteryPack.PerfParameters;
     
     # Driving consumption
-    μDrive=data.driveInfo.μDrive;
-    σDrive=data.driveInfo.σDrive;
-    # depLims[n,:]=data[n].driveInfo.depLims;
-    # arrLims[n,:]=data[n].driveInfo.arrLims;
-    SoCdep=data.driveInfo.SoCdep;
+    # μDrive=data.driveInfo.μDrive;
+    # σDrive=data.driveInfo.σDrive;
+    # # depLims[n,:]=data[n].driveInfo.depLims;
+    # # arrLims[n,:]=data[n].driveInfo.arrLims;
+    # SoCdep=data.driveInfo.SoCdep;
+    # γ = data.driveInfo.γ[it0:itend];
+    # tDep = data.driveInfo.tDep;
+    SoCdep = data.driveInfo.SoCdep;
     γ = data.driveInfo.γ[it0:itend];
-    tDep = data.driveInfo.tDep;
+    Pdrive = data.driveInfo.Pdrive[day]
     
     # Now we need to project it into the cont t-domain.
-    γ_interp = linear_interpolation(Dt, γ[:]) 
-    @parameter_function(model, γf == (t) -> γ_interp(t))
-    Pdrive = rand(truncated(Normal(μDrive, σDrive); lower = 0.01)); # Gaussian distribution
-    # Pdrive .< 0 ? Pdrive = 0.01 : nothing; # safe lock for negative driving power
-    Ereq=sum(Pdrive.*(1 .-γ)*Δt)./3600;
-    # check if the driving power is greater than the energy in the battery pack.
-    while  Ereq .> Qev0.*Npev.*Nsev.*(aOCV.+bOCV)./1000*0.8
-        Pdrive = rand(truncated(Normal(μDrive, σDrive); lower = 0.01)); # Gaussian distribution
-        # Pdrive .< 0 ? Pdrive = 0.01 : nothing; # safe lock for negative driving power
-        Ereq=sum(Pdrive.*(1 .-γ)*Δt)./3600;
-    end
+    γ_interp = linear_interpolation(Dt, γ)
+    @parameter_function(model, γf == (t) -> γ_interp(t)) # make InfiniteOpt compatible
+    # γ_interp = linear_interpolation(Dt, γ[:]) 
+    # @parameter_function(model, γf == (t) -> γ_interp(t))
+    # Pdrive = rand(truncated(Normal(μDrive, σDrive); lower = 0.01)); # Gaussian distribution
+    # # Pdrive .< 0 ? Pdrive = 0.01 : nothing; # safe lock for negative driving power
+    # Ereq=sum(Pdrive.*(1 .-γ)*Δt)./3600;
+    # # check if the driving power is greater than the energy in the battery pack.
+    # while  Ereq .> Qev0.*Npev.*Nsev.*(aOCV.+bOCV)./1000*0.8
+    #     Pdrive = rand(truncated(Normal(μDrive, σDrive); lower = 0.01)); # Gaussian distribution
+    #     # Pdrive .< 0 ? Pdrive = 0.01 : nothing; # safe lock for negative driving power
+    #     Ereq=sum(Pdrive.*(1 .-γ)*Δt)./3600;
+    # end
 
     # User requirement at departure time
     # check if tDep is inside Dt
     SoCev=model[:SoCev];
+    depIdx = [findfirst(diff(γ[n,:]) .== -1) for n ∈ 1:nEV];
     model[:ϵSoC]=[]; # assign name in the model
-    for day in eachindex(tDep[:]) # if there's more than one day loop over them
-        td = tDep[day] # pick value
-        td = td * 3600 + (24 * 3600 * (day - 1)) # change to secs and add days
-        # find the nearest td inside supports(t)
-        td = findmin(abs.(td .- supports(t)))[1]
-        # Check if the time index is within the bounds of SoCev
-        if td >= t0 && td <= tend
-            ϵSoCexpr = SoCev[1](td) .- SoCdep
-            push!(model[:ϵSoC], ϵSoCexpr) # push to the expression vector
-        end
-    end
+    tDep = [Dt[depIdx[n]] for n ∈ 1:nEV] # departure time
+    model[:ϵSoC] = [SoCev[n](tDep[n]) - SoCdep[n] for n ∈ 1:nEV];
+    # SoCev=model[:SoCev];
+    # model[:ϵSoC]=[]; # assign name in the model
+    # for day in eachindex(tDep[:]) # if there's more than one day loop over them
+    #     td = tDep[day] # pick value
+    #     td = td * 3600 + (24 * 3600 * (day - 1)) # change to secs and add days
+    #     # find the nearest td inside supports(t)
+    #     td = findmin(abs.(td .- supports(t)))[1]
+    #     # Check if the time index is within the bounds of SoCev
+    #     if td >= t0 && td <= tend
+    #         ϵSoCexpr = SoCev[1](td) .- SoCdep
+    #         push!(model[:ϵSoC], ϵSoCexpr) # push to the expression vector
+    #     end
+    # end
     
     if type == "bucket"
         # Model variables

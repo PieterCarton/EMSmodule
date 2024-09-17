@@ -214,6 +214,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
     # make new time window
     it0 = round(Int,(t0/Δt));
     itend = it0+length(Dt)-1;
+    day = ceil(Int, it0/length(Dt)*365);
     bPev = model[:bPev];
 
     @unpack GenInfo, PerfParameters, AgingParameters=data.carBatteryPack

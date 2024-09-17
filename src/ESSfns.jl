@@ -263,6 +263,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
     # model[:ϵSoC]=[]; # assign name in the model
     tDep = Dt[depIdx] # departure time
     # model[:ϵSoC] = SoCev(tDep) - SoCdep;
+    println(SoCev(tDep))
+    println(SoCdep)
     @expression(model, ϵSoC, SoCev(tDep) - SoCdep)
     # SoCev=model[:SoCev];
     # model[:ϵSoC]=[]; # assign name in the model

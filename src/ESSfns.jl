@@ -259,10 +259,10 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
     # User requirement at departure time
     # check if tDep is inside Dt
     SoCev=model[:SoCev];
-    depIdx = [findfirst(diff(γ[n,:]) .== -1) for n ∈ 1:nEV];
+    depIdx = findfirst(diff(γ[n,:]) .== -1);
     model[:ϵSoC]=[]; # assign name in the model
-    tDep = [Dt[depIdx[n]] for n ∈ 1:nEV] # departure time
-    model[:ϵSoC] = [SoCev[n](tDep[n]) - SoCdep[n] for n ∈ 1:nEV];
+    tDep = Dt[depIdx] # departure time
+    model[:ϵSoC] = SoCev(tDep) - SoCdep;
     # SoCev=model[:SoCev];
     # model[:ϵSoC]=[]; # assign name in the model
     # for day in eachindex(tDep[:]) # if there's more than one day loop over them

@@ -513,7 +513,6 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
                 Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
             γf = results["γf"][shift+1];
-            
             Phpe = results["Phpe"][shift+1]
             results["Pg"][shift+1] = copy(Ple + Phpe - PpvMPPT - # data
                 Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));

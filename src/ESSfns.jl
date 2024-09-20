@@ -442,7 +442,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
         for n in 1:nEV
             if !isnothing(depIdx[n])
                 tDep = Dt[depIdx[n]] # departure time
-                ϵSoC[n] = SoCev[n](tDep[n]) .- SoCdep[n]
+                ϵSoC[n] = SoCev[n](tDep) .- SoCdep[n]
             end
         end
     end

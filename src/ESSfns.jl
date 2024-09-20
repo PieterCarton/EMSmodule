@@ -260,10 +260,12 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
     # check if tDep is inside Dt
     SoCev=model[:SoCev];
     depIdx = findfirst(diff(γ) .== -1);
+    if !isnothing(depIdx) # if there's a departure time
+        tDep = Dt[depIdx] # departure time
+        @expression(model, ϵSoC[n ∈ 1:nEV], SoCev[n](tDep) .- SoCdep)
+    end
     # model[:ϵSoC]=[]; # assign name in the model
-    tDep = Dt[depIdx] # departure time
     # model[:ϵSoC] = SoCev(tDep) - SoCdep;
-    @expression(model, ϵSoC[n ∈ 1:nEV], SoCev[n](tDep) .- SoCdep)
     # SoCev=model[:SoCev];
     # model[:ϵSoC]=[]; # assign name in the model
     # for day in eachindex(tDep[:]) # if there's more than one day loop over them
@@ -432,9 +434,21 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     # check if tDep is inside Dt
     SoCev=model[:SoCev];
     depIdx = [findfirst(diff(γ[n,:]) .== -1) for n ∈ 1:nEV];
-    model[:ϵSoC]=[]; # assign name in the model
-    tDep = [Dt[depIdx[n]] for n ∈ 1:nEV] # departure time
-    model[:ϵSoC] = [SoCev[n](tDep[n]) - SoCdep[n] for n ∈ 1:nEV];
+    # initialize the ϵSoC in 0.0
+    @expression(model, ϵSoC[n ∈ 1:nEV], (SoCev[n] .- SoCdep[n]) .* 0.)
+    if .!isnothing(depIdx) # if there's a departure time
+        # an element might be nothing, so we need to filter it out
+        # for the non-nothing elements the εSoC is 0.
+        for n in 1:nEV
+            if !isnothing(depIdx[n])
+                tDep = Dt[depIdx[n]] # departure time
+                ϵSoC[n] = SoCev[n](tDep[n]) .- SoCdep[n]
+            end
+        end
+    end
+    # model[:ϵSoC]=[]; # assign name in the model
+    # tDep = [Dt[depIdx[n]] for n ∈ 1:nEV] # departure time
+    # model[:ϵSoC] = [SoCev[n](tDep[n]) - SoCdep[n] for n ∈ 1:nEV];
     # for day in eachindex(tDep[1,:]) # if there's more than one day loop over them
     #     for n in 1:nEV # loop over the EVs
     #         td = tDep[n, day] # pick value

@@ -508,17 +508,14 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         Pbess = results["Pbess"][shift+1];
         if nEV != 1
             γf = [results["γf"][n][shift+1] for n ∈ 1:nEV];
-            results["Pg"][shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
+            Phpe = results["Phpe"][shift+1]
+            results["Pg"][shift+1] = copy(Ple + Phpe - PpvMPPT - # data
                 Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
             γf = results["γf"][shift+1];
-            println(typeof(γf))
-            println(typeof(Ple))
-            println(typeof(results["Phpe"]))
-            println(typeof(PpvMPPT))
-            println(typeof(Pbess))
-            println(typeof(sum([Pev[n] .* γf for n ∈ 1:nEV])))
-            results["Pg"][shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
+            
+            Phpe = results["Phpe"][shift+1]
+            results["Pg"][shift+1] = copy(Ple + Phpe - PpvMPPT - # data
                 Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
     else

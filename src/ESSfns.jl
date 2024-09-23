@@ -234,13 +234,11 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
     # σDrive=data.driveInfo.σDrive;
     # # depLims[n,:]=data[n].driveInfo.depLims;
     # # arrLims[n,:]=data[n].driveInfo.arrLims;
-    # SoCdep=data.driveInfo.SoCdep;
-    # γ = data.driveInfo.γ[it0:itend];
     # tDep = data.driveInfo.tDep;
     SoCdep = data.driveInfo.SoCdep;
     γ = data.driveInfo.γ[it0:itend];
     Pdrive = data.driveInfo.Pdrive[day]
-    
+    println("Value: ",unique(γ), "type ", typeof(γ), "size ", size(γ))
     # Now we need to project it into the cont t-domain.
     γ_interp = linear_interpolation(Dt, γ)
     @parameter_function(model, γf == (t) -> γ_interp(t)) # make InfiniteOpt compatible

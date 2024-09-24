@@ -491,11 +491,11 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         end
     end
     # re-balance the power
-    # from the Thermal balance we adjust the HP
-    results["Phpe"][shift+1] =  copy(Plt - Pst - results["Ptess"]) / data["HP"].η
-    # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
-    # thus we have to check if the HP power goes negative and dump it in the house
     if typeOpt == "MPC"
+        # from the Thermal balance we adjust the HP
+        results["Phpe"][shift+1] =  copy(Plt - Pst - results["Ptess"]) / data["HP"].η
+        # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
+        # thus we have to check if the HP power goes negative and dump it in the house
         # excess heat, rejected from the TESS
         if results["Phpe"][shift+1] < 0
             Qex = copy(-results["Phpe"]) .* data["HP"].η
@@ -517,7 +517,12 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
             results["Pg"][shift+1] = copy(Ple + Phpe - PpvMPPT - # data
                 Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
-    else
+    else # typeOpt == "day-ahead"
+        # from the Thermal balance we adjust the HP
+        results["Phpe"] =  copy(Plt - Pst - results["Ptess"]) / data["HP"].η
+        # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
+        # thus we have to check if the HP power goes negative and dump it in the house
+        # excess heat, rejected from the TESS
         Qex = zeros(shift+1); # excess heat, rejected from the TESS
         Qex[results["Phpe"] .< 0] = copy(-results["Phpe"][results["Phpe"] .< 0]) .* data["HP"].η;
         results["Phpe"][results["Phpe"] .< 0] .= 0; # set the HP power to 0

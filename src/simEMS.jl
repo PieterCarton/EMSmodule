@@ -497,9 +497,9 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
         # thus we have to check if the HP power goes negative and dump it in the house
         # excess heat, rejected from the TESS
-        if results["Phpe"][shift+1] < 0
+        if results["Phpe"][shift+1] < 0.
             Qex = copy(-results["Phpe"]) .* data["HP"].η
-            results["Phpe"][shift+1] .= 0; # set the HP power to 0
+            results["Phpe"][shift+1] = 0.; # set the HP power to 0
             results["Plt"][shift+1] = copy(Plt .+ Qex); # dump the rejected heat in the house
         end
         # electrical re-balance with the new HP power

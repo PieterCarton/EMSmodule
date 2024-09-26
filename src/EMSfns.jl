@@ -315,7 +315,7 @@ function pei!(model::InfiniteModel, sets::modelSettings, data::Dict) # power ele
     # Power balance DC busbar
     # If we have EVs
     if any(name.(all_variables(model)) .== "Pev[1]")
-        Pev_sum = nEV != 1 ? sum(model[:γ_cont][n].*model[:Pev][n] for n in 1:nEV) : sum(model[:γ_cont].*model[:Pev][n] for n in 1:nEV)
+        Pev_sum = nEV != 1 ? sum(model[:γf][n].*model[:Pev][n] for n in 1:nEV) : sum(model[:γf].*model[:Pev][n] for n in 1:nEV)
     else
         Pev_sum = 0
     end
@@ -375,12 +375,16 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     # Aging costs CHECK
     clossbess = 1.2; # cost of lost capacity EUR/Ah
     Wloss=W[3]; # regularization factor for lost capacity
-    if Wloss != 0
+    if Wloss != 0.
         # cQloss = Wloss != 0 ? ( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600) : 0.0;
         lossBESS = data["BESS"].GenInfo.Ns * data["BESS"].GenInfo.Np * model[:ilossbess];
-        lossEV = [data["EV"][n].carBatteryPack.GenInfo.Ns * 
-                data["EV"][n].carBatteryPack.GenInfo.Np *
-                model[:ilossev][n] for n ∈ 1:sets.nEV]
+        if any(name.(all_variables(model)) .== "ilossev[1]")
+            lossEV = [data["EV"][n].carBatteryPack.GenInfo.Ns * 
+                    data["EV"][n].carBatteryPack.GenInfo.Np *
+                    model[:ilossev][n] for n ∈ 1:sets.nEV]
+        else
+            lossEV = zeros(sets.nEV);
+        end
         cQloss = ∫(( Wloss*(lossBESS+sum(lossEV[n] for n ∈ 1:sets.nEV))/3600),t);
     else
         cQloss = 0.0;
@@ -398,14 +402,15 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     Wlims = W[4]; # penalty for TESS overcharging
     SoCtess = model[:SoCtess]; SoCtessMax = data["TESS"].SoCLim[2];
     # SoCbess = model[:SoCbess]; SoCbessMin = data["BESS"].GenInfo.SoCLim[1];
-    @variable(model, auxTess ≥ 0, Infinite(t));
+    @variable(model, auxTess ≥ 0., Infinite(t));
     @constraint(model, auxTess ≥ SoCtess - SoCtessMax);
     # @variable(model, auxBess ≥ 0, Infinite(t));
     # @constraint(model, auxBess ≥ SoCbessMin - SoCbess);
 
     # Define penalty for not charging
     WSoCDep = W[2]
-    pDep = (isempty(model[:ϵSoC]) ? 0 : WSoCDep*sum(model[:ϵSoC][n]^2 for n ∈ eachindex(model[:ϵSoC])))
+    pDep = (any(name.(all_variables(model)) .== "Pev[1]") ?
+            WSoCDep*sum(model[:ϵSoC][n]^2 for n ∈ eachindex(model[:ϵSoC])) : 0);
 
     # Define objective function
     if any(name.(all_variables(model)) .== "ilossbess")
@@ -472,7 +477,14 @@ function set_warm_start(model::InfiniteModel, preRes::Dict)
                 append!(x_opt, zeros(96))
             =#
             haskey(preRes, name(x)) ? x_opt = preRes[name(x)] : x_opt = zeros(length(supports(t)))
-            length(x_opt) == length(supports(t)) ? nothing : append!(x_opt, zeros(length(supports(t))-length(x_opt)))
+            # length(x_opt) == length(supports(t)) ? nothing : append!(x_opt, zeros(length(supports(t))-length(x_opt)))
+            if length(x_opt) != length(supports(t))
+                if length(x_opt) > length(supports(t))
+                    x_opt = x_opt[1:length(supports(t))]
+                else # length(x_opt) < length(supports(t))
+                    append!(x_opt, zeros(length(supports(t))-length(x_opt)))
+                end
+            end
             # maybe change to just repeating the same value instead of 0s
             x_opt_interp = linear_interpolation(value.(t), x_opt, extrapolation_bc = Line())
             set_start_value_function(x, t -> x_opt_interp(t))
@@ -504,7 +516,7 @@ function getResults(model::InfiniteModel)
     # add simulation time, EV availability and status of the solver
     merge!(xdict, Dict("t"=>supports(model[:t]),
                         # Forecasts - simulated for now
-                        "γ_cont"=>value.(model[:γ_cont]),   
+                        haskey(xdict, "Pev[1]") ? "γf"=>value.(model[:γf]) : "γf"=>zeros(size(supports(model[:t]))),   
                         "PpvMPPT"=>value.(model[:PpvMPPT]),
                         "Ple"=>value.(model[:Ple]),
                         "λsell"=>value.(model[:λsell]),
@@ -550,19 +562,19 @@ function concatResultsRH(results::Vector{Dict}; typeOpt::String="MPC")
             # Check if the key requires special handling and skip the "status" key
             if key == :"status" || key == :"compTime" 
                 continue
-            elseif key == :"γ_cont"
-                # check nEV (number of EVs) to see if we need to handle the γ_cont differently
-                if size(results[1]["γ_cont"],1) == length(results[1]["t"]) 
+            elseif key == :"γf"
+                # check nEV (number of EVs) to see if we need to handle the γf differently
+                if size(results[1]["γf"],1) == length(results[1]["t"]) 
                     # only one EV
-                    # γ_cont = [results[st][key][shift+1] for st in 1:steps];
-                    γ_cont = [results[st][key][shift] for st in 1:steps];
+                    # γf = [results[st][key][shift+1] for st in 1:steps];
+                    γf = [results[st][key][shift] for st in 1:steps];
                 else
-                    nEV = size(results[1]["γ_cont"],1)
-                    # γ_cont = [[results[st][key][n][shift+1] for n ∈ 1:nEV] for st in 1:steps];
-                    γ_cont = [[results[st][key][n][shift] for n ∈ 1:nEV] for st in 1:steps];
-                    # γ_cont = [[results[st][key][1][2], results[st][key][2][2]] for st in 1:steps];
+                    nEV = size(results[1]["γf"],1)
+                    # γf = [[results[st][key][n][shift+1] for n ∈ 1:nEV] for st in 1:steps];
+                    γf = [[results[st][key][n][shift] for n ∈ 1:nEV] for st in 1:steps];
+                    # γf = [[results[st][key][1][2], results[st][key][2][2]] for st in 1:steps];
                 end
-                RHdict[key] = hcat(γ_cont...)
+                RHdict[key] = hcat(γf...)
             else
                 # For other keys, use the original approach
                 # hardcoding the shift for now just in case
@@ -584,20 +596,20 @@ function concatResultsRH(results::Vector{Dict}; typeOpt::String="MPC")
             # Check if the key requires special handling and skip the "status" key
             if key == :"status" || key == :"compTime" 
                 continue
-            elseif key == :"γ_cont"
+            elseif key == :"γf"
                 #=
-                # γ_cont = [[results[st][key][1][1:shift+1], results[st][key][2][1:shift+1]] for st in 1:steps];
-                # RHdict[key] = hcat(γ_cont...)
+                # γf = [[results[st][key][1][1:shift+1], results[st][key][2][1:shift+1]] for st in 1:steps];
+                # RHdict[key] = hcat(γf...)
                 =#
-                if size(results[1]["γ_cont"],1) == length(results[1]["t"]) 
+                if size(results[1]["γf"],1) == length(results[1]["t"]) 
                     # only one EV
-                    # γ_cont = [results[st][key][shift+1] for st in 1:steps];
-                    γ_cont = vcat([results[st][key][1:shift+1] for st in 1:steps]...);
+                    # γf = [results[st][key][shift+1] for st in 1:steps];
+                    γf = vcat([results[st][key][1:shift+1] for st in 1:steps]...);
                 else
-                    nEV = size(results[1]["γ_cont"],1)
-                    γ_cont = [vcat([results[st][key][n][1:shift+1] for st ∈ 1:steps]...) for n ∈ 1:nEV]
+                    nEV = size(results[1]["γf"],1)
+                    γf = [vcat([results[st][key][n][1:shift+1] for st ∈ 1:steps]...) for n ∈ 1:nEV]
                 end
-                RHdict[key] = γ_cont
+                RHdict[key] = γf
             else
                 # For other keys, use the original approach
                 RHdict[key] = vcat([results[st][key][1:shift+1] for st in 1:steps]...);

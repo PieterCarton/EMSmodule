@@ -6,8 +6,6 @@
 # Version: 1.5
 # Date: 17/01/2024
 
-using LiiBRA
-
 function perfModel_matching(stgAsset::BESSData)
     if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
         perfModel = stgAsset.PerfParameters
@@ -418,13 +416,13 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         results["Ptess"][shift+1] =  copy(Plt - Pst - Phpe .* data["HP"].η)
         # and from the electrical one the grid
         if nEV != 1
-            γ_cont = [results["γ_cont"][n][shift+1] for n ∈ 1:nEV];
+            γf = [results["γf"][n][shift+1] for n ∈ 1:nEV];
             results["Pg"][shift+1] = copy(Ple + copy(results["Phpe"][shift+1]) - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
-            γ_cont = results["γ_cont"][shift+1];
+            γf = results["γf"][shift+1];
             results["Pg"][shift+1] = copy(Ple + copy(results["Phpe"][shift+1]) - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
     else # typeOpt == "day-ahead"
         # First, we get the optimal decisions from our policy function.
@@ -447,13 +445,13 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         results["Ptess"] =  copy(Plt - Pst - Phpe .* data["HP"].η)
         # and from the electrical one the grid
         if nEV != 1
-            γ_cont = [results["γ_cont"][n][1:shift+1] for n ∈ 1:nEV];
+            γf = [results["γf"][n][1:shift+1] for n ∈ 1:nEV];
             results["Pg"][1:shift+1] = copy(Ple + Phpe - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
-            γ_cont = results["γ_cont"][1:shift+1];
+            γf = results["γf"][1:shift+1];
             results["Pg"][1:shift+1] = copy(Ple + Phpe - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
         
     end
@@ -493,31 +491,38 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         end
     end
     # re-balance the power
-    # from the Thermal balance we adjust the HP
-    results["Phpe"] =  copy(Plt - Pst - results["Ptess"]) / data["HP"].η
-    # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
-    # thus we have to check if the HP power goes negative and dump it in the house
     if typeOpt == "MPC"
+        # from the Thermal balance we adjust the HP
+        results["Phpe"][shift+1] =  copy(Plt - Pst - results["Ptess"]) / data["HP"].η
+        # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
+        # thus we have to check if the HP power goes negative and dump it in the house
         # excess heat, rejected from the TESS
-        if results["Phpe"] < 0
-            Qex = copy(-results["Phpe"]) .* data["HP"].η
-            results["Phpe"] .= 0; # set the HP power to 0
-            results["Plt"] = copy(Plt .+ Qex); # dump the rejected heat in the house
+        if results["Phpe"][shift+1] < 0.
+            Qex = copy(-results["Phpe"][shift+1]) .* data["HP"].η
+            results["Phpe"][shift+1] = 0.; # set the HP power to 0
+            results["Plt"][shift+1] = copy(Plt .+ Qex); # dump the rejected heat in the house
         end
         # electrical re-balance with the new HP power
         # re-extract the power of the sa (just in case we have hit the SoC limits)
         Pev = [results["Pev[$n]"][shift+1] for n ∈ 1:nEV];
         Pbess = results["Pbess"][shift+1];
         if nEV != 1
-            γ_cont = [results["γ_cont"][n][shift+1] for n ∈ 1:nEV];
-            results["Pg"][shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+            γf = [results["γf"][n][shift+1] for n ∈ 1:nEV];
+            Phpe = results["Phpe"][shift+1]
+            results["Pg"][shift+1] = copy(Ple + Phpe - PpvMPPT - # data
+                Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
-            γ_cont = results["γ_cont"][shift+1];
-            results["Pg"][shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+            γf = results["γf"][shift+1];
+            Phpe = results["Phpe"][shift+1]
+            results["Pg"][shift+1] = copy(Ple + Phpe - PpvMPPT - # data
+                Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
-    else
+    else # typeOpt == "day-ahead"
+        # from the Thermal balance we adjust the HP
+        results["Phpe"] =  copy(Plt - Pst - results["Ptess"]) / data["HP"].η
+        # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
+        # thus we have to check if the HP power goes negative and dump it in the house
+        # excess heat, rejected from the TESS
         Qex = zeros(shift+1); # excess heat, rejected from the TESS
         Qex[results["Phpe"] .< 0] = copy(-results["Phpe"][results["Phpe"] .< 0]) .* data["HP"].η;
         results["Phpe"][results["Phpe"] .< 0] .= 0; # set the HP power to 0
@@ -527,13 +532,13 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         Pev = [results["Pev[$n]"][1:shift+1] for n ∈ 1:nEV];
         Pbess = results["Pbess"][1:shift+1];
         if nEV != 1
-            γ_cont = [results["γ_cont"][n][1:shift+1] for n ∈ 1:nEV];
+            γf = [results["γf"][n][1:shift+1] for n ∈ 1:nEV];
             results["Pg"][1:shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont[n] for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
-            γ_cont = results["γ_cont"][1:shift+1];
+            γf = results["γf"][1:shift+1];
             results["Pg"][1:shift+1] = copy(Ple + results["Phpe"] - PpvMPPT - # data
-                Pbess - sum([Pev[n] .* γ_cont for n ∈ 1:nEV]));
+                Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
     end
     return results, data

@@ -3,9 +3,9 @@
 # The functions include different models for battery performance and aging.
 #
 # By: Darío Slaifstein, PhD-student @TU Delft, DCES.
-# Branch: agingModeling
+# Branch: RFO_ITEC2024
 # Version: 1.0
-# Date: 24/02/2023
+# Date: 10/09/2024
 
 
 function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
@@ -214,6 +214,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
     # make new time window
     it0 = round(Int,(t0/Δt));
     itend = it0+length(Dt)-1;
+    day = ceil(Int, it0/(24*3600/Δt));
     bPev = model[:bPev];
 
     @unpack GenInfo, PerfParameters, AgingParameters=data.carBatteryPack
@@ -229,42 +230,53 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
     @unpack type=data.carBatteryPack.PerfParameters;
     
     # Driving consumption
-    μDrive=data.driveInfo.μDrive;
-    σDrive=data.driveInfo.σDrive;
-    # depLims[n,:]=data[n].driveInfo.depLims;
-    # arrLims[n,:]=data[n].driveInfo.arrLims;
-    SoCdep=data.driveInfo.SoCdep;
+    # μDrive=data.driveInfo.μDrive;
+    # σDrive=data.driveInfo.σDrive;
+    # # depLims[n,:]=data[n].driveInfo.depLims;
+    # # arrLims[n,:]=data[n].driveInfo.arrLims;
+    # tDep = data.driveInfo.tDep;
+    SoCdep = data.driveInfo.SoCdep;
     γ = data.driveInfo.γ[it0:itend];
-    tDep = data.driveInfo.tDep;
-    
+    Pdrive = data.driveInfo.Pdrive[day]
     # Now we need to project it into the cont t-domain.
-    γ_interp = linear_interpolation(Dt, γ[:]) 
-    @parameter_function(model, γ_cont == (t) -> γ_interp(t))
-    Pdrive = rand(truncated(Normal(μDrive, σDrive); lower = 0.01)); # Gaussian distribution
-    # Pdrive .< 0 ? Pdrive = 0.01 : nothing; # safe lock for negative driving power
-    Ereq=sum(Pdrive.*(1 .-γ)*Δt)./3600;
-    # check if the driving power is greater than the energy in the battery pack.
-    while  Ereq .> Qev0.*Npev.*Nsev.*(aOCV.+bOCV)./1000*0.8
-        Pdrive = rand(truncated(Normal(μDrive, σDrive); lower = 0.01)); # Gaussian distribution
-        # Pdrive .< 0 ? Pdrive = 0.01 : nothing; # safe lock for negative driving power
-        Ereq=sum(Pdrive.*(1 .-γ)*Δt)./3600;
-    end
+    γ_interp = linear_interpolation(Dt, γ)
+    @parameter_function(model, γf == (t) -> γ_interp(t)) # make InfiniteOpt compatible
+    # γ_interp = linear_interpolation(Dt, γ[:]) 
+    # @parameter_function(model, γf == (t) -> γ_interp(t))
+    # Pdrive = rand(truncated(Normal(μDrive, σDrive); lower = 0.01)); # Gaussian distribution
+    # # Pdrive .< 0 ? Pdrive = 0.01 : nothing; # safe lock for negative driving power
+    # Ereq=sum(Pdrive.*(1 .-γ)*Δt)./3600;
+    # # check if the driving power is greater than the energy in the battery pack.
+    # while  Ereq .> Qev0.*Npev.*Nsev.*(aOCV.+bOCV)./1000*0.8
+    #     Pdrive = rand(truncated(Normal(μDrive, σDrive); lower = 0.01)); # Gaussian distribution
+    #     # Pdrive .< 0 ? Pdrive = 0.01 : nothing; # safe lock for negative driving power
+    #     Ereq=sum(Pdrive.*(1 .-γ)*Δt)./3600;
+    # end
 
     # User requirement at departure time
     # check if tDep is inside Dt
     SoCev=model[:SoCev];
-    model[:ϵSoC]=[]; # assign name in the model
-    for day in eachindex(tDep[:]) # if there's more than one day loop over them
-        td = tDep[day] # pick value
-        td = td * 3600 + (24 * 3600 * (day - 1)) # change to secs and add days
-        # find the nearest td inside supports(t)
-        td = findmin(abs.(td .- supports(t)))[1]
-        # Check if the time index is within the bounds of SoCev
-        if td >= t0 && td <= tend
-            ϵSoCexpr = SoCev[1](td) .- SoCdep
-            push!(model[:ϵSoC], ϵSoCexpr) # push to the expression vector
-        end
+    depIdx = findfirst(diff(γ) .== -1);
+    @expression(model, ϵSoC[n ∈ 1:nEV], (SoCev[n] .- SoCdep) * 0.)
+    if !isnothing(depIdx) # if there's a departure time
+        tDep = Dt[depIdx] # departure time
+        [ϵSoC[n] = SoCev[n](tDep) .- SoCdep for n ∈ 1:nEV]
     end
+    # model[:ϵSoC]=[]; # assign name in the model
+    # model[:ϵSoC] = SoCev(tDep) - SoCdep;
+    # SoCev=model[:SoCev];
+    # model[:ϵSoC]=[]; # assign name in the model
+    # for day in eachindex(tDep[:]) # if there's more than one day loop over them
+    #     td = tDep[day] # pick value
+    #     td = td * 3600 + (24 * 3600 * (day - 1)) # change to secs and add days
+    #     # find the nearest td inside supports(t)
+    #     td = findmin(abs.(td .- supports(t)))[1]
+    #     # Check if the time index is within the bounds of SoCev
+    #     if td >= t0 && td <= tend
+    #         ϵSoCexpr = SoCev[1](td) .- SoCdep
+    #         push!(model[:ϵSoC], ϵSoCexpr) # push to the expression vector
+    #     end
+    # end
     
     if type == "bucket"
         # Model variables
@@ -283,7 +295,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
         =#
         # Model constraints
         @constraints(model, begin
-            availability[n ∈ 1:nEV], model[:γ_cont].*model[:Pev][n] + (1-model[:γ_cont]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
+            availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
             [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
             # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
             [n ∈ 1:nEV], iev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n]/OCVev[n] # current per branch     
@@ -330,7 +342,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
         end); 
         # Model constraints
         @constraints(model, begin
-            availability[n ∈ 1:nEV], model[:γ_cont].*model[:Pev][n] + (1-model[:γ_cont]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
+            availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
             [n ∈ 1:nEV], iev[n] == 1e3*model[:PevTot][n]/Npev[n]/Nsev[n]/vtev[n] # current per branch. 1e3 to convert kW->W
             # Transition function
             [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 # Aging Qev
@@ -347,7 +359,6 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
 
     return model;
 end
-    
 
 function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EVData})
 # battPerf: Battery performance modeling function
@@ -360,6 +371,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     # it0 = round(Int,(t0/Δt) + 1);
     it0 = round(Int,(t0/Δt));
     itend = it0+length(Dt)-1;
+    # calculate in which day is it0
+    day = ceil(Int, it0/(24*3600/Δt));
     bPev = model[:bPev];
 
     Npev = zeros(nEV,1); Nsev = zeros(nEV,1);
@@ -384,49 +397,69 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     @unpack type=data[1].carBatteryPack.PerfParameters;
 
     # Driving consumption
-    μDrive=zeros(nEV,1);
-    σDrive=zeros(nEV,1);
-    SoCdep=zeros(nEV,1);
+    # μDrive=zeros(nEV,1);
+    # σDrive=zeros(nEV,1);
     γ=zeros(nEV,length(Dt));
-    tDep=[];
+    # tDep=[];
+    SoCdep = zeros(nEV)
+    Pdrive = zeros(nEV)
 
     for n in 1:nEV
-        μDrive[n]=data[n].driveInfo.μDrive;
-        σDrive[n]=data[n].driveInfo.σDrive;
+        # μDrive[n]=data[n].driveInfo.μDrive;
+        # σDrive[n]=data[n].driveInfo.σDrive;
         SoCdep[n]=data[n].driveInfo.SoCdep;
         γ[n,:] = data[n].driveInfo.γ[it0:itend];
-        push!(tDep, data[n].driveInfo.tDep);
+        Pdrive[n] = data[n].driveInfo.Pdrive[day]
+        # push!(tDep, data[n].driveInfo.tDep);
     end
-    tDep=vcat(tDep'...); # reorganize in a matrix
+    # tDep=vcat(tDep'...); # reorganize in a matrix
     
     # Now we need to project it into the cont t-domain.
+    # γ_interp = linear_interpolation((nEV, Dt), γ)
     γ_interp = linear_interpolation((1:nEV, Dt), γ)
-    @parameter_function(model, γ_cont[n in 1:nEV] == (t) -> γ_interp(n, t)) # make InfiniteOpt compatible
-    Pdrive = [rand(truncated(Normal(μDrive[n], σDrive[n]); lower = 0.01)) for n in 1:nEV]; # Gaussian distribution
-    Ereq=[sum(Pdrive[n].*(1 .-γ[n,:])*Δt)./3600 for n in 1:nEV];
-    # check if the driving power is greater than the energy in the battery pack.
-    while  any(Ereq .> Qev0.*Npev.*Nsev.*(aOCV.+bOCV)./1000*0.8)   
-        Pdrive = [rand(truncated(Normal(μDrive[n], σDrive[n]); lower = 0.01)) for n in 1:nEV]; # Gaussian distribution
-        Ereq=[sum(Pdrive[n].*(1 .-γ[n,:])*Δt)./3600 for n in 1:nEV];
-    end
+    @parameter_function(model, γf[n ∈ 1:nEV] == (t) -> γ_interp(n, t)) # make InfiniteOpt compatible
+    # Pdrive = [rand(truncated(Normal(μDrive[n], σDrive[n]); lower = 0.01)) for n in 1:nEV]; # Gaussian distribution
+    # Pdrive[Pdrive .< 0] .= 0.01; # safe lock for negative driving power
+    # Ereq=[sum(Pdrive[n].*(1 .-γ[n,:])*Δt)./3600 for n in 1:nEV];
+    # # check if the driving power is greater than the energy in the battery pack.
+    # while  any(Ereq .> Qev0.*Npev.*Nsev.*(aOCV.+bOCV)./1000*0.8)   
+    #     Pdrive = [rand(truncated(Normal(μDrive[n], σDrive[n])); lower = 0.01) for n in 1:nEV]; # Gaussian distribution
+    #     # Pdrive[Pdrive .< 0] .= 0.01; # safe lock for negative driving power
+    #     Ereq=[sum(Pdrive[n].*(1 .-γ[n,:])*Δt)./3600 for n in 1:nEV];
+    # end
     
     # User requirement at departure time
     # check if tDep is inside Dt
     SoCev=model[:SoCev];
-    model[:ϵSoC]=[]; # assign name in the model
-    for day in eachindex(tDep[1,:]) # if there's more than one day loop over them
-        for n in 1:nEV # loop over the EVs
-            td = tDep[n, day] # pick value
-            td = td * 3600 + (24 * 3600 * (day - 1)) # change to secs and add days
-            # find the nearest td inside supports(t)
-            td = findmin(abs.(td .- supports(t)))[1]
-            # Check if the time index is within the bounds of SoCev
-            if td >= t0 && td <= tend
-                ϵSoCexpr = SoCev[n](td) - SoCdep[n]
-                push!(model[:ϵSoC], ϵSoCexpr) # push to the expression vector
+    depIdx = [findfirst(diff(γ[n,:]) .== -1) for n ∈ 1:nEV];
+    # initialize the ϵSoC in 0.0
+    @expression(model, ϵSoC[n ∈ 1:nEV], (SoCev[n] .- SoCdep[n]) .* 0.)
+    if .!isnothing(depIdx) # if there's a departure time
+        # an element might be nothing, so we need to filter it out
+        # for the non-nothing elements the εSoC is 0.
+        for n in 1:nEV
+            if !isnothing(depIdx[n])
+                tDep = Dt[depIdx[n]] # departure time
+                ϵSoC[n] = SoCev[n](tDep) .- SoCdep[n]
             end
         end
     end
+    # model[:ϵSoC]=[]; # assign name in the model
+    # tDep = [Dt[depIdx[n]] for n ∈ 1:nEV] # departure time
+    # model[:ϵSoC] = [SoCev[n](tDep[n]) - SoCdep[n] for n ∈ 1:nEV];
+    # for day in eachindex(tDep[1,:]) # if there's more than one day loop over them
+    #     for n in 1:nEV # loop over the EVs
+    #         td = tDep[n, day] # pick value
+    #         td = td * 3600 + (24 * 3600 * (day - 1)) # change to secs and add days
+    #         # find the nearest td inside supports(t)
+    #         td = findmin(abs.(td .- supports(t)))[1]
+    #         # Check if the time index is within the bounds of SoCev
+    #         if td >= t0 && td <= tend
+    #             ϵSoCexpr = SoCev[n](td) - SoCdep[n]
+    #             push!(model[:ϵSoC], ϵSoCexpr) # push to the expression vector
+    #         end
+    #     end
+    # end
 
     if type == "bucket"
     # Model variables
@@ -436,11 +469,10 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
             vmin[n] ≤ OCVev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t),(start=OCVev0[n]) # open circuit voltage of the cell
             iev[1:nEV], Infinite(t)  # current per branch 
         end);
-    # Initial conditions
-    
+    # Initial conditions   
     # Model constraints
        @constraints(model, begin
-           availability[n ∈ 1:nEV], model[:γ_cont][n].*model[:Pev][n] + (1-model[:γ_cont][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
+           availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
            [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
            # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
            [n ∈ 1:nEV], iev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n]/OCVev[n] # current per branch     
@@ -487,7 +519,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
         end); 
     # Model constraints
         @constraints(model, begin
-            availability[n ∈ 1:nEV], model[:γ_cont][n].*model[:Pev][n] + (1-model[:γ_cont][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
+            availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
             [n ∈ 1:nEV], iev[n] == 1e3*model[:PevTot][n]/Npev[n]/Nsev[n]/vtev[n] # current per branch. 1e3 to convert kW->W
             # Transition function
             [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 # Aging Qev
@@ -962,7 +994,8 @@ end
 
 function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationary battery pack
     t=model[:t];
-    t0=supports(t)[1]; Δt = supports(t)[2]-supports(t)[1];
+    t0=supports(t)[1]; tend = supports(t)[end];
+    Δt = supports(t)[2]-supports(t)[1];
     fs = 3600/Δt; # sampling frequency [1/hr]
 
     # Extract data
@@ -995,14 +1028,18 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
         PbessPos ≤ (1-bPbess)*PbessMax
     end);
     
-    # t1 = t0 + 6*3600
-    t1 = t0 + termCond*3600
     # Initial conditions
-    @constraints(model,begin
-        SoCbess(t0) ==  SoCbess0
-        SoCbess(t1) ==  SoCbess(t1+24*3600) # periodic condition
-    end);
+    # @constraints(model,begin
+    #     SoCbess(t0) ==  SoCbess0
+    #     SoCbess(t1) ==  SoCbess(t1+24*3600-Δt) # periodic condition
+    # end);
     
+    @constraint(model, initC, SoCbess(t0) ==  SoCbess0) # Initial condition
+    if termCond ≥ 0.
+        t1 = t0 + termCond*3600
+        @constraint(model, termC, SoCbess(t1) ==  SoCbess(t1+24*3600-Δt)) # periodic condition
+    end
+
     model=add_battPerf(model, sets, data["BESS"]) # Operation model
     # check if aging model is needed
     if sets.costWeights[3] != 0

@@ -994,7 +994,8 @@ end
 
 function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationary battery pack
     t=model[:t];
-    t0=supports(t)[1]; Δt = supports(t)[2]-supports(t)[1];
+    t0=supports(t)[1]; tend = supports(t)[end];
+    Δt = supports(t)[2]-supports(t)[1];
     fs = 3600/Δt; # sampling frequency [1/hr]
 
     # Extract data
@@ -1027,14 +1028,18 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
         PbessPos ≤ (1-bPbess)*PbessMax
     end);
     
-    # t1 = t0 + 6*3600
-    t1 = t0 + termCond*3600
     # Initial conditions
-    @constraints(model,begin
-        SoCbess(t0) ==  SoCbess0
-        SoCbess(t1) ==  SoCbess(t1+24*3600-Δt) # periodic condition
-    end);
+    # @constraints(model,begin
+    #     SoCbess(t0) ==  SoCbess0
+    #     SoCbess(t1) ==  SoCbess(t1+24*3600-Δt) # periodic condition
+    # end);
     
+    @constraint(model, initC, SoCbess(t0) ==  SoCbess0) # Initial condition
+    if termCond ≥ 0.
+        t1 = t0 + termCond*3600
+        @constraint(model, termC, SoCbess(t1) ==  SoCbess(t1+24*3600-Δt)) # periodic condition
+    end
+
     model=add_battPerf(model, sets, data["BESS"]) # Operation model
     # check if aging model is needed
     if sets.costWeights[3] != 0

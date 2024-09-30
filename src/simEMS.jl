@@ -222,7 +222,8 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
 
     # Update the PBROM matrices
     SoC0 = copy(stgAsset.GenInfo.SoC0); # Starting SOC
-    SList = collect(1:-0.1:stgAsset.GenInfo.SoCLim[1]) # List of SOC points for model generation
+    # SList = collect(1:-0.1:stgAsset.GenInfo.SoCLim[1]) # List of SOC points for model generation
+    SList = [collect(1.0:-0.1:0.2); 0.15] # List of SOC points for model generation
     Sₑ = 4 # Spatial points in electrolyte
     Sₛ = 2 # Spatial point in solid
     # Spatial!(perfModel.Cell, Sₑ, Sₛ) # ideally we should be using this instead of Base.invokelatest(), but there is an issue with LiiBRA.jl

@@ -237,20 +237,66 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     stgVars, ~ = Base.invokelatest(Simulate, perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
 
     # check if the solution has NaNs
+    # if any(isnan.(stgVars.Cell_SOC))
+    #     println("NaNs in the solution, $key has hit the lower SoC limit.")
+    #     # For the state Sₛₐ,ₜ₊₁, replace NaNs with the last valid value 
+    #     iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the NaNs
+    #     stgVars.Cell_SOC[iNaN] .= stgAsset.GenInfo.SoCLim[1];
+    #     stgVars.Cell_V[iNaN] .= stgAsset.GenInfo.vLim[1];
+    #     # for the actions replace NaNs with 0
+    #     iNaN = isnan.(stgVars.Iapp); # indeces of the NaNs
+    #     stgVars.Iapp[iNaN] .= 0;
+    #     PsaOpt[iNaN[1:end-1]] .= 0;
+    #     # update the results dictionary with PsaOpt
+    #     PsaOpt = 1e-3*PsaOpt * stgAsset.GenInfo.Ns * stgAsset.GenInfo.Np; # pack power in kW
+    #     results["P$key"] = copy(PsaOpt[1:upSampRatio:end]); # save the downsampled array
+    # end
     if any(isnan.(stgVars.Cell_SOC))
-        println("NaNs in the solution, $key has hit the lower SoC limit.")
+        println("NaNs in the solution, $key is out of bounds.")
         # For the state Sₛₐ,ₜ₊₁, replace NaNs with the last valid value 
-        iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the NaNs
-        stgVars.Cell_SOC[iNaN] .= stgAsset.GenInfo.SoCLim[1];
-        stgVars.Cell_V[iNaN] .= stgAsset.GenInfo.vLim[1];
+        iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the SoC NaNs
+        # stgVars.Cell_SOC[iNaN] .= stgAsset.GenInfo.SoCLim[1]; # this assumes its NaN only in the lowerlimit
+        # if the first NaN is in the first index, then we have to replace it with the initial SoC
+        iNaN[1] == CartesianIndex(1,1) ? SoCNaN = SoC0 : SoCNaN = stgVars.Cell_SOC[iNaN[1]-CartesianIndex(1,0)];
+        # check if SoCNaN is out of bounds
+        SoCNaN < stgAsset.GenInfo.SoCLim[1] ? SoCNaN = (stgAsset.GenInfo.SoCLim[1] .+ 1e-4) : nothing;
+        SoCNaN > stgAsset.GenInfo.SoCLim[2] ? SoCNaN = (stgAsset.GenInfo.SoCLim[2] .- 1e-4) : nothing;
+        stgVars.Cell_SOC[iNaN] .= SoCNaN
+        # indeces of the vₜ NaNs
+        iNaN = findall(isnan.(stgVars.Cell_V));
+        # stgVars.Cell_V[iNaN] .= stgAsset.GenInfo.vLim[1];
+        iNaN[1] == CartesianIndex(1,1) ? vtNaN = stgAsset.GenInfo.vLim[1] : vtNaN = stgVars.Cell_V[iNaN[1]-CartesianIndex(1,0)];
+        # check if vtNaN is out of bounds
+        vtNaN < stgAsset.GenInfo.vLim[1] ? vtNaN = stgAsset.GenInfo.vLim[1] : nothing;
+        vtNaN > stgAsset.GenInfo.vLim[2] ? vtNaN = stgAsset.GenInfo.vLim[2] : nothing;
+        stgVars.Cell_V[iNaN] .= vtNaN
         # for the actions replace NaNs with 0
         iNaN = isnan.(stgVars.Iapp); # indeces of the NaNs
-        stgVars.Iapp[iNaN] .= 0;
-        PsaOpt[iNaN[1:end-1]] .= 0;
+        stgVars.Iapp[iNaN] .= 0.;
+        PsaOpt[iNaN[1:end-1]] .= 0.;
         # update the results dictionary with PsaOpt
         PsaOpt = 1e-3*PsaOpt * stgAsset.GenInfo.Ns * stgAsset.GenInfo.Np; # pack power in kW
         results["P$key"] = copy(PsaOpt[1:upSampRatio:end]); # save the downsampled array
     end
+    # ensure that the SoC is within the limits
+    if any(stgVars.Cell_SOC .< stgAsset.GenInfo.SoCLim[1]) || any(stgVars.Cell_SOC .> stgAsset.GenInfo.SoCLim[2])
+        iMin = stgVars.Cell_SOC .< stgAsset.GenInfo.SoCLim[1]
+        iMax = stgVars.Cell_SOC .> stgAsset.GenInfo.SoCLim[2]
+        # replace the SoC values that are out of bounds
+        stgVars.Cell_SOC[iMin] .= (stgAsset.GenInfo.SoCLim[1] .+ 1e-4);
+        stgVars.Cell_SOC[iMax] .= (stgAsset.GenInfo.SoCLim[2] .- 1e-4);
+        # same for the voltages
+        stgVars.Cell_V[stgVars.Cell_V .< stgAsset.GenInfo.vLim[1]] .= (stgAsset.GenInfo.vLim[1] .+ 1e-4);
+        stgVars.Cell_V[stgVars.Cell_V .> stgAsset.GenInfo.vLim[2]] .= (stgAsset.GenInfo.vLim[2] .- 1e-4);
+        # for the actions replace NaNs with 0
+        stgVars.Iapp[findall(iMin .| iMax)] .= 0.;
+        PsaOpt[findall(iMin[1:end-1])] .= 0.;
+        PsaOpt[findall(iMax[1:end-1])] .= 0.;
+        # update the results dictionary with PsaOpt
+        PsaOpt = 1e-3*PsaOpt * stgAsset.GenInfo.Ns * stgAsset.GenInfo.Np; # pack power in kW
+        results["P$key"] = copy(PsaOpt[1:upSampRatio:end]); # save the downsampled array
+    end
+
     # Update the results dictionary with the Performance Vars
     # modify the key for the EV case. Check if it is "evTot" or "evTot[$n]"
     # if it is "evTot[$n]" then we need to change it to "ev[$n]"

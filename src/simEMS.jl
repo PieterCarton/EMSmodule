@@ -238,22 +238,8 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     stgVars, ~ = Base.invokelatest(Simulate, perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
 
     # check if the solution has NaNs
-    # if any(isnan.(stgVars.Cell_SOC))
-    #     println("NaNs in the solution, $key has hit the lower SoC limit.")
-    #     # For the state Sₛₐ,ₜ₊₁, replace NaNs with the last valid value 
-    #     iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the NaNs
-    #     stgVars.Cell_SOC[iNaN] .= stgAsset.GenInfo.SoCLim[1];
-    #     stgVars.Cell_V[iNaN] .= stgAsset.GenInfo.vLim[1];
-    #     # for the actions replace NaNs with 0
-    #     iNaN = isnan.(stgVars.Iapp); # indeces of the NaNs
-    #     stgVars.Iapp[iNaN] .= 0;
-    #     PsaOpt[iNaN[1:end-1]] .= 0;
-    #     # update the results dictionary with PsaOpt
-    #     PsaOpt = 1e-3*PsaOpt * stgAsset.GenInfo.Ns * stgAsset.GenInfo.Np; # pack power in kW
-    #     results["P$key"] = copy(PsaOpt[1:upSampRatio:end]); # save the downsampled array
-    # end
     if any(isnan.(stgVars.Cell_SOC))
-        println("NaNs in the solution, $key is out of bounds.")
+        println("NaNs in the solution, $key has hit the lower SoC limit.")
         # For the state Sₛₐ,ₜ₊₁, replace NaNs with the last valid value 
         iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the SoC NaNs
         # stgVars.Cell_SOC[iNaN] .= stgAsset.GenInfo.SoCLim[1]; # this assumes its NaN only in the lowerlimit
@@ -271,10 +257,13 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
         vtNaN < stgAsset.GenInfo.vLim[1] ? vtNaN = stgAsset.GenInfo.vLim[1] : nothing;
         vtNaN > stgAsset.GenInfo.vLim[2] ? vtNaN = stgAsset.GenInfo.vLim[2] : nothing;
         stgVars.Cell_V[iNaN] .= vtNaN
+        iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the NaNs
+        stgVars.Cell_SOC[iNaN] .= stgAsset.GenInfo.SoCLim[1];
+        stgVars.Cell_V[iNaN] .= stgAsset.GenInfo.vLim[1];
         # for the actions replace NaNs with 0
         iNaN = isnan.(stgVars.Iapp); # indeces of the NaNs
-        stgVars.Iapp[iNaN] .= 0.;
-        PsaOpt[iNaN[1:end-1]] .= 0.;
+        stgVars.Iapp[iNaN] .= 0;
+        PsaOpt[iNaN[1:end-1]] .= 0;
         # update the results dictionary with PsaOpt
         PsaOpt = 1e-3*PsaOpt * stgAsset.GenInfo.Ns * stgAsset.GenInfo.Np; # pack power in kW
         results["P$key"] = copy(PsaOpt[1:upSampRatio:end]); # save the downsampled array
@@ -297,7 +286,6 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
         PsaOpt = 1e-3*PsaOpt * stgAsset.GenInfo.Ns * stgAsset.GenInfo.Np; # pack power in kW
         results["P$key"] = copy(PsaOpt[1:upSampRatio:end]); # save the downsampled array
     end
-
     # Update the results dictionary with the Performance Vars
     # modify the key for the EV case. Check if it is "evTot" or "evTot[$n]"
     # if it is "evTot[$n]" then we need to change it to "ev[$n]"
@@ -447,9 +435,9 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         # keyOpt = ["Pbess", PevKey, "Ptess", "Phpe"];
         # Phpe = results[:"Phpe"];
         # PaOpt = Dict();
-        Pbess = results["Pbess"][shift];
-        Phpe = results["Phpe"][shift];
-        Pev = [results["Pev[$n]"][shift] for n ∈ 1:nEV];
+        Pbess = results["Pbess"][shift+1];
+        Phpe = results["Phpe"][shift+1];
+        Pev = [results["Pev[$n]"][shift+1] for n ∈ 1:nEV];
         
         # Second, we get the exogenous information.
         # P = P̂ + ϵ
@@ -462,15 +450,15 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         # from the Thermal balance we adjust the HP
         # results["Phpe"][shift+1] =  copy((Plt - Pst - Ptess) ./ data["HP"].η) # check the case were Phpe<0
         # adjust TESS power instead of HP (to avoid negative HP power)
-        results["Ptess"][shift] =  copy(Plt - Pst - Phpe .* data["HP"].η)
+        results["Ptess"][shift+1] =  copy(Plt - Pst - Phpe .* data["HP"].η)
         # and from the electrical one the grid
         if nEV != 1
-            γf = [results["γf"][n][shift] for n ∈ 1:nEV];
-            results["Pg"][shift] = copy(Ple + copy(results["Phpe"][shift]) - PpvMPPT - # data
+            γf = [results["γf"][n][shift+1] for n ∈ 1:nEV];
+            results["Pg"][shift+1] = copy(Ple + copy(results["Phpe"][shift+1]) - PpvMPPT - # data
                 Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
-            γf = results["γf"][shift];
-            results["Pg"][shift] = copy(Ple + copy(results["Phpe"][shift]) - PpvMPPT - # data
+            γf = results["γf"][shift+1];
+            results["Pg"][shift+1] = copy(Ple + copy(results["Phpe"][shift+1]) - PpvMPPT - # data
                 Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
     else # typeOpt == "day-ahead"
@@ -545,25 +533,23 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         # since the TESS overcharge might have come from the ST or the HP this new HP power might be negative,
         # thus we have to check if the HP power goes negative and dump it in the house
         # excess heat, rejected from the TESS
-        if (Plt - Pst - results["Ptess"][shift]) < 0.
-            Qex = copy(-Plt + Pst + results["Ptess"][shift]) .* data["HP"].η
-            results["Phpe"][shift] = 0.; # set the HP power to 0
-            results["Plt"][shift] = copy(Plt .+ Qex); # dump the rejected heat in the house
-        else
-            results["Phpe"][shift] =  copy(Plt - Pst - results["Ptess"][shift]) / data["HP"].η
+        if (Plt - Pst - results["Ptess"][shift+1]) < 0.
+            Qex = copy(-Plt + Pst + results["Ptess"][shift+1]) .* data["HP"].η
+            results["Phpe"][shift+1] = 0.; # set the HP power to 0
+            results["Plt"][shift+1] = copy(Plt .+ Qex); # dump the rejected heat in the house
         end
         # electrical re-balance with the new HP power
         # re-extract the power of the sa (just in case we have hit the SoC limits)
-        Pev = [results["Pev[$n]"][shift] for n ∈ 1:nEV];
-        Pbess = results["Pbess"][shift];
+        Pev = [results["Pev[$n]"][shift+1] for n ∈ 1:nEV];
+        Pbess = results["Pbess"][shift+1];
         if nEV != 1
-            γf = [results["γf"][n][shift] for n ∈ 1:nEV];
-            Phpe = results["Phpe"][shift]
-            results["Pg"][shift] = copy(Ple + Phpe - PpvMPPT - # data
+            γf = [results["γf"][n][shift+1] for n ∈ 1:nEV];
+            Phpe = results["Phpe"][shift+1]
+            results["Pg"][shift+1] = copy(Ple + Phpe - PpvMPPT - # data
                 Pbess - sum([Pev[n] .* γf[n] for n ∈ 1:nEV]));
         else
-            γf = results["γf"][shift];
-            Phpe = results["Phpe"][shift]
+            γf = results["γf"][shift+1];
+            Phpe = results["Phpe"][shift+1]
             results["Pg"][shift] = copy(Ple + Phpe - PpvMPPT - # data
                 Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end

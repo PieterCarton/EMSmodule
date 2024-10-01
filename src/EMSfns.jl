@@ -578,13 +578,11 @@ function concatResultsRH(results::Vector{Dict}; typeOpt::String="MPC")
             else
                 # For other keys, use the original approach
                 # hardcoding the shift for now just in case
-                # if length(results[1][key]) != 1
-                #     RHdict[key] = [results[st][key][shift] for st in 1:steps]
-                # else
-                #     RHdict[key] = [results[st][key][shift] for st in 1:steps]
-                # end
-                # RHdict[key] = [results[st][key][shift+1] for st in 1:steps]
-                RHdict[key] = [results[st][key][shift] for st in 1:steps]
+                if length(results[1][key]) != 1
+                    RHdict[key] = [results[st][key][shift+1] for st in 1:steps]
+                else
+                    RHdict[key] = [results[st][key][shift] for st in 1:steps]
+                end
             end
         end
     elseif typeOpt == "day-ahead"

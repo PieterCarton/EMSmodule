@@ -145,10 +145,10 @@ function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPe
     if typeOpt == "MPC"
         # ALL OF THIS SHOULD BE IN results[ts+1]
         # # Update results dictionary
-        haskey(results,"Q$key") ? results[Q_key][shift+1] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
-        haskey(results,"R0$key") ? results["R0$key"][shift+1] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
-        haskey(results,"δSEI$key") ? results["δSEI$key"][shift+1] = copy(δSEI) : merge!(results,Dict("δSEI$key"=>copy(δSEI))); 
-        haskey(results,"εₑ$key") ? results["εₑ$key"][shift+1] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
+        haskey(results,"Q$key") ? results[Q_key][shift] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
+        haskey(results,"R0$key") ? results["R0$key"][shift] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
+        haskey(results,"δSEI$key") ? results["δSEI$key"][shift] = copy(δSEI) : merge!(results,Dict("δSEI$key"=>copy(δSEI))); 
+        haskey(results,"εₑ$key") ? results["εₑ$key"][shift] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
     else # typeOpt == "day-ahead"
         haskey(results,"Q$key") ? results[Q_key] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
         haskey(results,"R0$key") ? results["R0$key"] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));

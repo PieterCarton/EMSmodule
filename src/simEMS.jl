@@ -214,7 +214,7 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
         PsaOpt = repeat(PsaOpt, inner=upSampRatio)
     end
     # we adapt for the packs series and parallel cells and the units
-    PsaOpt = 1e3*PsaOpt / stgAsset.GenInfo.Ns / stgAsset.GenInfo.Np ;
+    PsaOpt = 1e3*PsaOpt / stgAsset.GenInfo.Ns / stgAsset.GenInfo.Np;
     
     # The idea is to simulate the storage asset 
     # Tk = stgAsset.GenInfo.Tk; # Time constant

@@ -75,16 +75,16 @@ function update_stgAsset_deg!(stgAsset::BESSData, results::Dict, key::String; ty
     εₑ = copy(results["εₑ$key"])
     if typeOpt == "MPC"
         shift = 1;
-        stgAsset.GenInfo.SoHQ = copy(Qsa[shift+2]/Qsan);
+        stgAsset.GenInfo.SoHQ = copy(Qsa[shift+1]/Qsan);
         stgAsset.GenInfo.SoHR0 = copy(R0);
         if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
-            stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[shift+2] / Qsa0)
+            stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[shift+1] / Qsa0)
             stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0);
         elseif typeof(stgAsset.PerfParameters) == ECMPerfParams
             stgAsset.PerfParameters.R0Param = copy([R0]);
         end
         if typeof(stgAsset.AgingParameters) == JinAgingParams
-            stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[shift+2] / Qsa0);
+            stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[shift+1] / Qsa0);
             stgAsset.AgingParameters.δSEI0 = copy(δSEI);
             stgAsset.AgingParameters.εₑ0 = copy(εₑ);
         end
@@ -191,7 +191,7 @@ function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPe
     if typeOpt == "MPC"
         # ALL OF THIS SHOULD BE IN results[ts+1]
         # # Update results dictionary
-        haskey(results,"Q$key") ? results[Q_key][shift+2] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
+        haskey(results,"Q$key") ? results[Q_key][shift+1] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
         haskey(results,"R0$key") ? results["R0$key"][shift+2] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
         haskey(results,"δSEI$key") ? results["δSEI$key"][shift+2] = copy(δSEI) : merge!(results,Dict("δSEI$key"=>copy(δSEI))); 
         haskey(results,"εₑ$key") ? results["εₑ$key"][shift+2] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));

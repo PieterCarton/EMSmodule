@@ -85,8 +85,8 @@ function update_stgAsset_deg!(stgAsset::BESSData, results::Dict, key::String; ty
         end
         if typeof(stgAsset.AgingParameters) == JinAgingParams
             stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[shift+2] / Qsa0);
-            stgAsset.AgingParameters.δSEI0 = copy(δSEI[shift+2]);
-            stgAsset.AgingParameters.εₑ0 = copy(εₑ[shift+2]);
+            stgAsset.AgingParameters.δSEI0 = copy(δSEI);
+            stgAsset.AgingParameters.εₑ0 = copy(εₑ);
         end
     else # typeOpt == "day-ahead"
         shift = Int(24*3600/Δt)-1;

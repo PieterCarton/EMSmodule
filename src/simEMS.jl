@@ -61,6 +61,52 @@ function agingModel_matching(stgAsset::BESSData, perfModel::CIDRAPBROMPerfParams
     return agingModel;
 end
 
+function update_stgAsset_deg!(stgAsset::BESSData, results::Dict, key::String; typeOpt::String="MPC")
+    # This function updates the storage asset with the degradation results
+    
+    # extract from the results dictionary the degradation results
+    Qsa = copy(results["Q$key"])
+    R0 = copy(results["R0$key"])
+    Qsan = copy(stgAsset.GenInfo.initQ); # rated capacity
+    SoHQ = copy(stgAsset.GenInfo.SoHQ); # initial SoHQ
+    Qsa0 = Qsan * SoHQ; # initial capacity
+    Qloss = Qsa0 .- Qsa
+    δSEI = copy(results["δSEI$key"])
+    εₑ = copy(results["εₑ$key"])
+    if typeOpt == "MPC"
+        shift = 1;
+        stgAsset.GenInfo.SoHQ = copy(Qsa[shift+2]/Qsan);
+        stgAsset.GenInfo.SoHR0 = copy(R0[shift+2]);
+        if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
+            stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[shift+2] / Qsa0)
+            stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0[shift+2]);
+        elseif typeof(stgAsset.PerfParameters) == ECMPerfParams
+            stgAsset.PerfParameters.R0Param = copy([R0[shift+2]]);
+        end
+        if typeof(stgAsset.AgingParameters) == JinAgingParams
+            stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[shift+2] / Qsa0);
+            stgAsset.AgingParameters.δSEI0 = copy(δSEI[shift+2]);
+            stgAsset.AgingParameters.εₑ0 = copy(εₑ[shift+2]);
+        end
+    else # typeOpt == "day-ahead"
+        shift = Int(24*3600/Δt)-1;
+        stgAsset.GenInfo.SoHQ = copy(Qsa[end]/Qsan);
+        stgAsset.GenInfo.SoHR0 = copy(R0[end]);
+        if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
+            stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[end] / Qsa0)
+            stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0[end]);
+        elseif typeof(stgAsset.PerfParameters) == ECMPerfParams
+            stgAsset.PerfParameters.R0Param = copy([R0[end]]);
+        end
+        if typeof(stgAsset.AgingParameters) == JinAgingParams
+            stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[end] / Qsa0);
+            stgAsset.AgingParameters.δSEI0 = copy(δSEI[end]);
+            stgAsset.AgingParameters.εₑ0 = copy(εₑ[end]);
+        end
+    end
+    return stgAsset;
+end
+
 # Now we calculate the aging independently for each of the storage devices
 function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPerfParams, results::Dict, key::String; typeOpt::String="MPC")
     @assert typeOpt ∈ ["MPC", "day-ahead"];
@@ -145,10 +191,10 @@ function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPe
     if typeOpt == "MPC"
         # ALL OF THIS SHOULD BE IN results[ts+1]
         # # Update results dictionary
-        haskey(results,"Q$key") ? results[Q_key][shift+1] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
-        haskey(results,"R0$key") ? results["R0$key"][shift+1] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
-        haskey(results,"δSEI$key") ? results["δSEI$key"][shift+1] = copy(δSEI) : merge!(results,Dict("δSEI$key"=>copy(δSEI))); 
-        haskey(results,"εₑ$key") ? results["εₑ$key"][shift+1] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
+        haskey(results,"Q$key") ? results[Q_key][shift+2] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
+        haskey(results,"R0$key") ? results["R0$key"][shift+2] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
+        haskey(results,"δSEI$key") ? results["δSEI$key"][shift+2] = copy(δSEI) : merge!(results,Dict("δSEI$key"=>copy(δSEI))); 
+        haskey(results,"εₑ$key") ? results["εₑ$key"][shift+2] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
     else # typeOpt == "day-ahead"
         haskey(results,"Q$key") ? results[Q_key] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
         haskey(results,"R0$key") ? results["R0$key"] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
@@ -156,22 +202,8 @@ function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPe
         haskey(results,"εₑ$key") ? results["εₑ$key"] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
     end
 
-    # merge!(results, Dict(Q_key=>Qsa0.-Qloss, "R0$key"=>R0, "δSEI$key"=>δSEI, "εₑ$key"=>εₑ)); # update results
     # final state for the stgAsset
-    # stgAsset.GenInfo.initQ = copy(Qsa0.-Qloss[end]); # 
-    stgAsset.GenInfo.SoHQ = copy(results[Q_key][end]/Qsan);
-    stgAsset.GenInfo.SoHR0 = copy(results["R0$key"][end]);
-    if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
-        stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[end] / Qsa0)
-        stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0[end]);
-    elseif typeof(stgAsset.PerfParameters) == ECMPerfParams
-        stgAsset.PerfParameters.R0Param = copy([R0[end]]);
-    end
-    if typeof(stgAsset.AgingParameters) == JinAgingParams
-        stgAsset.AgingParameters.z100p = copy(z100p .- Qloss[end] / Qsa0);
-        stgAsset.AgingParameters.δSEI0 = copy(δSEI[end]);
-        stgAsset.AgingParameters.εₑ0 = copy(εₑ[end]);
-    end
+    update_stgAsset_deg!(stgAsset, results, key; typeOpt=typeOpt)
     return stgAsset, results
 end
 

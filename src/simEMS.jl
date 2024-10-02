@@ -76,12 +76,12 @@ function update_stgAsset_deg!(stgAsset::BESSData, results::Dict, key::String; ty
     if typeOpt == "MPC"
         shift = 1;
         stgAsset.GenInfo.SoHQ = copy(Qsa[shift+2]/Qsan);
-        stgAsset.GenInfo.SoHR0 = copy(R0[shift+2]);
+        stgAsset.GenInfo.SoHR0 = copy(R0);
         if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
             stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[shift+2] / Qsa0)
-            stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0[shift+2]);
+            stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0);
         elseif typeof(stgAsset.PerfParameters) == ECMPerfParams
-            stgAsset.PerfParameters.R0Param = copy([R0[shift+2]]);
+            stgAsset.PerfParameters.R0Param = copy([R0]);
         end
         if typeof(stgAsset.AgingParameters) == JinAgingParams
             stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[shift+2] / Qsa0);

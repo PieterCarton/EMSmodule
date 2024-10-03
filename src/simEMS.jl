@@ -89,6 +89,7 @@ function update_stgAsset_deg!(stgAsset::BESSData, results::Dict, key::String; ty
             stgAsset.AgingParameters.εₑ0 = copy(εₑ);
         end
     else # typeOpt == "day-ahead"
+        Δt = copy(results[:"t"][2]-results[:"t"][1]); # timestep
         shift = Int(24*3600/Δt)-1;
         stgAsset.GenInfo.SoHQ = copy(Qsa[end]/Qsan);
         stgAsset.GenInfo.SoHR0 = copy(R0[end]);

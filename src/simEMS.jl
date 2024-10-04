@@ -61,6 +61,53 @@ function agingModel_matching(stgAsset::BESSData, perfModel::CIDRAPBROMPerfParams
     return agingModel;
 end
 
+function update_stgAsset_deg!(stgAsset::BESSData, results::Dict, key::String; typeOpt::String="MPC")
+    # This function updates the storage asset with the degradation results
+    
+    # extract from the results dictionary the degradation results
+    Qsa = copy(results["Q$key"])
+    R0 = copy(results["R0$key"])
+    Qsan = copy(stgAsset.GenInfo.initQ); # rated capacity
+    SoHQ = copy(stgAsset.GenInfo.SoHQ); # initial SoHQ
+    Qsa0 = Qsan * SoHQ; # initial capacity
+    Qloss = Qsa0 .- Qsa
+    δSEI = copy(results["δSEI$key"])
+    εₑ = copy(results["εₑ$key"])
+    if typeOpt == "MPC"
+        shift = 1;
+        stgAsset.GenInfo.SoHQ = copy(Qsa[shift+1]/Qsan);
+        stgAsset.GenInfo.SoHR0 = copy(R0);
+        if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
+            stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[shift+1] / Qsa0)
+            stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0);
+        elseif typeof(stgAsset.PerfParameters) == ECMPerfParams
+            stgAsset.PerfParameters.R0Param = copy([R0]);
+        end
+        if typeof(stgAsset.AgingParameters) == JinAgingParams
+            stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[shift+1] / Qsa0);
+            stgAsset.AgingParameters.δSEI0 = copy(δSEI);
+            stgAsset.AgingParameters.εₑ0 = copy(εₑ);
+        end
+    else # typeOpt == "day-ahead"
+        Δt = copy(results[:"t"][2]-results[:"t"][1]); # timestep
+        shift = Int(24*3600/Δt)-1;
+        stgAsset.GenInfo.SoHQ = copy(Qsa[end]/Qsan);
+        stgAsset.GenInfo.SoHR0 = copy(R0[end]);
+        if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
+            stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[end] / Qsa0)
+            stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0[end]);
+        elseif typeof(stgAsset.PerfParameters) == ECMPerfParams
+            stgAsset.PerfParameters.R0Param = copy([R0[end]]);
+        end
+        if typeof(stgAsset.AgingParameters) == JinAgingParams
+            stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[end] / Qsa0);
+            stgAsset.AgingParameters.δSEI0 = copy(δSEI[end]);
+            stgAsset.AgingParameters.εₑ0 = copy(εₑ[end]);
+        end
+    end
+    return stgAsset;
+end
+
 # Now we calculate the aging independently for each of the storage devices
 function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPerfParams, results::Dict, key::String; typeOpt::String="MPC")
     @assert typeOpt ∈ ["MPC", "day-ahead"];
@@ -79,8 +126,8 @@ function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPe
     if typeOpt == "MPC"
         # isa = copy(results[i_key][end]); # current
         # SoCsa = copy(results[SoC_key][end]); # SoC
-        isa = copy(results[i_key][shift]); # current
-        SoCsa = copy(results[SoC_key][shift]); # SoC
+        isa = copy(results[i_key][shift+1]); # current
+        SoCsa = copy(results[SoC_key][shift+1]); # SoC
     else # typeOpt == "day-ahead"
         isa = copy(results[i_key]); # current
         SoCsa = copy(results[SoC_key]); # SoC
@@ -145,10 +192,17 @@ function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPe
     if typeOpt == "MPC"
         # ALL OF THIS SHOULD BE IN results[ts+1]
         # # Update results dictionary
+<<<<<<< HEAD
         haskey(results,"Q$key") ? results[Q_key][shift] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
         haskey(results,"R0$key") ? results["R0$key"][shift] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
         haskey(results,"δSEI$key") ? results["δSEI$key"][shift] = copy(δSEI) : merge!(results,Dict("δSEI$key"=>copy(δSEI))); 
         haskey(results,"εₑ$key") ? results["εₑ$key"][shift] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
+=======
+        haskey(results,"Q$key") ? results[Q_key][shift+1] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
+        haskey(results,"R0$key") ? results["R0$key"][shift+2] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
+        haskey(results,"δSEI$key") ? results["δSEI$key"][shift+2] = copy(δSEI) : merge!(results,Dict("δSEI$key"=>copy(δSEI))); 
+        haskey(results,"εₑ$key") ? results["εₑ$key"][shift+2] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
+>>>>>>> shifts_tt1
     else # typeOpt == "day-ahead"
         haskey(results,"Q$key") ? results[Q_key] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
         haskey(results,"R0$key") ? results["R0$key"] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
@@ -156,22 +210,8 @@ function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPe
         haskey(results,"εₑ$key") ? results["εₑ$key"] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
     end
 
-    # merge!(results, Dict(Q_key=>Qsa0.-Qloss, "R0$key"=>R0, "δSEI$key"=>δSEI, "εₑ$key"=>εₑ)); # update results
     # final state for the stgAsset
-    # stgAsset.GenInfo.initQ = copy(Qsa0.-Qloss[end]); # 
-    stgAsset.GenInfo.SoHQ = copy(results[Q_key][end]/Qsan);
-    stgAsset.GenInfo.SoHR0 = copy(results["R0$key"][end]);
-    if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
-        stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[end] / Qsa0)
-        stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0[end]);
-    elseif typeof(stgAsset.PerfParameters) == ECMPerfParams
-        stgAsset.PerfParameters.R0Param = copy([R0[end]]);
-    end
-    if typeof(stgAsset.AgingParameters) == JinAgingParams
-        stgAsset.AgingParameters.z100p = copy(z100p .- Qloss[end] / Qsa0);
-        stgAsset.AgingParameters.δSEI0 = copy(δSEI[end]);
-        stgAsset.AgingParameters.εₑ0 = copy(εₑ[end]);
-    end
+    update_stgAsset_deg!(stgAsset, results, key; typeOpt=typeOpt)
     return stgAsset, results
 end
 
@@ -207,14 +247,14 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
 
     # Power setpoint
     if typeOpt == "MPC"
-        PsaOpt = copy(results["P$key"][shift]); # [kW]
+        PsaOpt = copy(results["P$key"][shift+1]); # [kW]
         PsaOpt = repeat([PsaOpt], inner=upSampRatio)
     else # typeOpt == "day-ahead"
         PsaOpt = copy(results["P$key"][1:shift+1]); # [kW]
         PsaOpt = repeat(PsaOpt, inner=upSampRatio)
     end
     # we adapt for the packs series and parallel cells and the units
-    PsaOpt = 1e3*PsaOpt / stgAsset.GenInfo.Ns / stgAsset.GenInfo.Np ;
+    PsaOpt = 1e3*PsaOpt / stgAsset.GenInfo.Ns / stgAsset.GenInfo.Np;
     
     # The idea is to simulate the storage asset 
     # Tk = stgAsset.GenInfo.Tk; # Time constant
@@ -237,7 +277,10 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     # stgVars, ~ = Simulate(perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
     stgVars, ~ = Base.invokelatest(Simulate, perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
 
+<<<<<<< HEAD
     # check if the solution has NaNs
+=======
+>>>>>>> shifts_tt1
     if any(isnan.(stgVars.Cell_SOC))
         println("NaNs in the solution, $key has hit the lower SoC limit.")
         # For the state Sₛₐ,ₜ₊₁, replace NaNs with the last valid value 
@@ -294,11 +337,11 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     end
 
     if typeOpt == "MPC"
-        results["SoC$key"][shift+1] = copy(stgVars.Cell_SOC[end]);
+        results["SoC$key"][shift+2] = copy(stgVars.Cell_SOC[end]);
         # stgAsset.GenInfo.SoC0 = copy(results["SoC$key"][2])
         stgAsset.GenInfo.SoC0 = copy(stgVars.Cell_SOC[end])
-        results["vt$key"][shift] = copy(stgVars.Cell_V[end]); # this one is up for debate CHECK
-        results["i$key"][shift] = copy(stgVars.Iapp[end]);
+        results["vt$key"][shift+1] = copy(stgVars.Cell_V[end]); # this one is up for debate CHECK
+        results["i$key"][shift+1] = copy(stgVars.Iapp[end]);
     else # typeOpt == "day-ahead"
         results["SoC$key"] = copy(stgVars.Cell_SOC[1:upSampRatio:end]);
         stgAsset.GenInfo.SoC0 = copy(stgVars.Cell_SOC[end])
@@ -336,7 +379,7 @@ function simulate_storage_asset!(stgAsset::TESSData, results::Dict, key::String;
 
     if typeOpt == "MPC"
         # easy simulation of a first order bucket model
-        PsaOpt = results["P$key"][shift];
+        PsaOpt = results["P$key"][shift+1];
         SoC0 = copy(stgAsset.SoC0); # Starting SOC
         # easy simulation of a first order bucket model
         if PsaOpt < 0 # when the TESS is being charged
@@ -360,8 +403,8 @@ function simulate_storage_asset!(stgAsset::TESSData, results::Dict, key::String;
         # previous implementation
         # results["SoC$key"] = copy(SoC0 .- cumsum(PsaOpt) .* Δt .* stgAsset.η ./ stgAsset.Q / 3600);
         # Save in the results Dict
-        results["SoC$key"][shift+1] = copy(SoCsa);
-        results["P$key"][shift] = copy(PsaOpt);
+        results["SoC$key"][shift+2] = copy(SoCsa);
+        results["P$key"][shift+1] = copy(PsaOpt);
         # save the last SoC for the next initial SoC
         stgAsset.SoC0 = copy(SoCsa);
     else # typeOpt == "day-ahead"
@@ -537,6 +580,11 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
             Qex = copy(-Plt + Pst + results["Ptess"][shift+1]) .* data["HP"].η
             results["Phpe"][shift+1] = 0.; # set the HP power to 0
             results["Plt"][shift+1] = copy(Plt .+ Qex); # dump the rejected heat in the house
+<<<<<<< HEAD
+=======
+        else
+            results["Phpe"][shift+1] =  copy(Plt - Pst - results["Ptess"][shift+1]) / data["HP"].η
+>>>>>>> shifts_tt1
         end
         # electrical re-balance with the new HP power
         # re-extract the power of the sa (just in case we have hit the SoC limits)
@@ -550,7 +598,11 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         else
             γf = results["γf"][shift+1];
             Phpe = results["Phpe"][shift+1]
+<<<<<<< HEAD
             results["Pg"][shift] = copy(Ple + Phpe - PpvMPPT - # data
+=======
+            results["Pg"][shift+1] = copy(Ple + Phpe - PpvMPPT - # data
+>>>>>>> shifts_tt1
                 Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
     else # typeOpt == "day-ahead"

@@ -190,7 +190,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
             # CHECK
             ibess == 1e3*model[:Pbess]/Npbess/Nsbess/vtbess # current per branch. 1e3 to convert kW->W
             # Transition function
-            ∂.(model[:SoCbess], t) .== -ηbess*ibess/Qbess/3600 # Aging Qbess
+            # ∂.(model[:SoCbess], t) .== -ηbess*ibess/Qbess/3600 # Aging Qbess
+            ∂.(model[:SoCbess], t) .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 # Aging Qbess
             ∂.(xbess[o ∈ nO], t) .== A*xbess[o ∈ nO]+B*ibess # ROM state transition
             # Output equations
             ybess .== C*xbess[o ∈ nO] + D*ibess

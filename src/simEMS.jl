@@ -192,17 +192,10 @@ function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPe
     if typeOpt == "MPC"
         # ALL OF THIS SHOULD BE IN results[ts+1]
         # # Update results dictionary
-<<<<<<< HEAD
-        haskey(results,"Q$key") ? results[Q_key][shift] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
-        haskey(results,"R0$key") ? results["R0$key"][shift] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
-        haskey(results,"δSEI$key") ? results["δSEI$key"][shift] = copy(δSEI) : merge!(results,Dict("δSEI$key"=>copy(δSEI))); 
-        haskey(results,"εₑ$key") ? results["εₑ$key"][shift] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
-=======
         haskey(results,"Q$key") ? results[Q_key][shift+1] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
         haskey(results,"R0$key") ? results["R0$key"][shift+2] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
         haskey(results,"δSEI$key") ? results["δSEI$key"][shift+2] = copy(δSEI) : merge!(results,Dict("δSEI$key"=>copy(δSEI))); 
         haskey(results,"εₑ$key") ? results["εₑ$key"][shift+2] = copy(εₑ) : merge!(results,Dict("εₑ$key"=>copy(εₑ)));
->>>>>>> shifts_tt1
     else # typeOpt == "day-ahead"
         haskey(results,"Q$key") ? results[Q_key] = copy(Qsa0.-Qloss) : merge!(results, Dict("Q$key"=>copy(Qsa0.-Qloss)));
         haskey(results,"R0$key") ? results["R0$key"] = copy(R0) : merge!(results,Dict("R0$key"=>copy(R0)));
@@ -277,10 +270,6 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     # stgVars, ~ = Simulate(perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
     stgVars, ~ = Base.invokelatest(Simulate, perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
 
-<<<<<<< HEAD
-    # check if the solution has NaNs
-=======
->>>>>>> shifts_tt1
     if any(isnan.(stgVars.Cell_SOC))
         println("NaNs in the solution, $key has hit the lower SoC limit.")
         # For the state Sₛₐ,ₜ₊₁, replace NaNs with the last valid value 
@@ -580,11 +569,8 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
             Qex = copy(-Plt + Pst + results["Ptess"][shift+1]) .* data["HP"].η
             results["Phpe"][shift+1] = 0.; # set the HP power to 0
             results["Plt"][shift+1] = copy(Plt .+ Qex); # dump the rejected heat in the house
-<<<<<<< HEAD
-=======
         else
             results["Phpe"][shift+1] =  copy(Plt - Pst - results["Ptess"][shift+1]) / data["HP"].η
->>>>>>> shifts_tt1
         end
         # electrical re-balance with the new HP power
         # re-extract the power of the sa (just in case we have hit the SoC limits)
@@ -598,11 +584,7 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         else
             γf = results["γf"][shift+1];
             Phpe = results["Phpe"][shift+1]
-<<<<<<< HEAD
-            results["Pg"][shift] = copy(Ple + Phpe - PpvMPPT - # data
-=======
             results["Pg"][shift+1] = copy(Ple + Phpe - PpvMPPT - # data
->>>>>>> shifts_tt1
                 Pbess - sum([Pev[n] .* γf for n ∈ 1:nEV]));
         end
     else # typeOpt == "day-ahead"

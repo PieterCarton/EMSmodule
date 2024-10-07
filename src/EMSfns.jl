@@ -167,14 +167,14 @@ function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
     PtessMax = data["TESS"].PowerLim[2]; # Max power [kW]
     # Ptess0 = data["TESS"].P0; # Initial Power [p.u.]
     SoCtessMin = data["TESS"].SoCLim[1]; # Min State of Charge [p.u.]
-    # SoCtessMax = data["TESS"].SoCLim[2]; # Max State of Charge [p.u.]
+    SoCtessMax = data["TESS"].SoCLim[2]; # Max State of Charge [p.u.]
     SoCtess0 = data["TESS"].SoC0; # Initial State of Charge [p.u.]
     ηtess = data["TESS"].η; # thermal efficiency
        
     # Add variables
     @variables(model, begin
-        # SoCtessMin ≤ SoCtess ≤ SoCtessMax, Infinite(t) # State of Charge
-        SoCtess, Infinite(t) # State of Charge
+        SoCtessMin ≤ SoCtess ≤ SoCtessMax, Infinite(t) # State of Charge
+        # SoCtess, Infinite(t) # State of Charge
         Ptess, Infinite(t) # Thermal power
         bPtess, Infinite(t), Bin # Binary variable for TESS power
         0 ≤ PtessPos, Infinite(t) # Ptess^+ out power
@@ -371,7 +371,11 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     # Grid costs
     Wgrid = W[1]; # regularization factor for grid cost. max(λ)*max(P)
     cgrid = Wgrid .* (model[:PgPos]*λbuy + model[:PgNeg]*λsell);
-    
+    # cgridᴰᴬ = Wgrid .* ((λbuyᴰᴬ-λsellᴰᴬ)/2 * (-Pgᴰᴬ*bPg + Pgᴰᴬ*(1 - bPg)) +
+    #                  (λbuyᴰᴬ+λsellᴰᴬ)/2 * Pgᴰᴬ)
+    # cgridᶜᵀ = Wgrid .* ((λbuyᶜᵀ-λsellᶜᵀ)/2 * abs(Pgᶜᵀ - Pgfᴰᴬ)) +
+    #                  (λbuyᶜᵀ+λsellᶜᵀ)/2 * (Pgᶜᵀ-Pgfᴰᴬ))
+
     # Aging costs CHECK
     clossbess = 1.2; # cost of lost capacity EUR/Ah
     Wloss=W[3]; # regularization factor for lost capacity
@@ -583,11 +587,8 @@ function concatResultsRH(results::Vector{Dict}; typeOpt::String="MPC")
                 else
                     RHdict[key] = [results[st][key][shift] for st in 1:steps]
                 end
-<<<<<<< HEAD
-=======
                 # RHdict[key] = [results[st][key][shift+1] for st in 1:steps]
                 # RHdict[key] = [results[st][key][shift] for st in 1:steps]
->>>>>>> shifts_tt1
             end
         end
     elseif typeOpt == "day-ahead"

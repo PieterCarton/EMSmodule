@@ -78,7 +78,7 @@ function processPrices(df;
         return priceData = [priceData priceData.*0.95]
     end
     # for the rest of the profiles you continue with the seasonal profiles
-    priceData=getSeasonalProfiles(priceData; type=profType)[season];
+    priceData=getSeasonalProfiles(priceData; type=profType, n_samples_per_hour = fs)[season];
     # for biweekly profiles we need to repeat the weekly profile twice and append the first day to the end
     if profType == "biweekly"
         priceData=repeat(priceData[1:(end-upSampRatio*24)], outer=2); append!(priceData, priceData[1:upSampRatio*24])

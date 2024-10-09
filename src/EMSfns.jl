@@ -174,7 +174,7 @@ function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
     # Add variables
     @variables(model, begin
         # SoCtessMin ≤ SoCtess ≤ SoCtessMax, Infinite(t) # State of Charge
-        SoCtessMin ≤ SoCtess, Infinite(t) # State of Charge
+        SoCtess, Infinite(t) # State of Charge
         Ptess, Infinite(t) # Thermal power
         bPtess, Infinite(t), Bin # Binary variable for TESS power
         0 ≤ PtessPos, Infinite(t) # Ptess^+ out power
@@ -186,6 +186,7 @@ function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
         PtessNeg + PtessPos .== Ptess
         # PtessNeg * (1/ηtess) + PtessPos * ηtess .== Ptess
         PtessPos ≤ (1-bPtess)*PtessMax
+        SoCtessMin ≤ SoCtess
     end);
     
     # Initial conditions

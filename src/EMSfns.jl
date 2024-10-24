@@ -36,7 +36,7 @@ The function translates the measurement into a forecast and adds the forecast to
 # Returns
 - model::InfiniteModel: updated with the added deterministic forecast.
 """
-function spv!(model::InfiniteModel, data::Dict) # solar pv panel
+function spv!(model::InfiniteModel, data::Dict; add_noise::Bool = true) # solar pv panel
     # MPPT measurement
     t = model[:t];
     Dt = supports(t);
@@ -46,9 +46,12 @@ function spv!(model::InfiniteModel, data::Dict) # solar pv panel
     itend = it0+length(supports(t))-1;
     
     MPPTmeas = data["SPV"].MPPTData[it0:itend];
-    # simulated forecast
-    MPPTnoisy = zeros(size(MPPTmeas));
-    MPPTnoisy[MPPTmeas .> 0] = [rand(Uniform(0.5*MPPTmeas[tt],1.1*MPPTmeas[tt])) for tt ∈ findall(MPPTmeas .> 0)]
+    MPPTnoisy = copy(MPPTmeas);
+    if add_noise
+        # simulated forecast
+        MPPTnoisy[MPPTmeas .> 0] = [rand(Uniform(0.5*MPPTmeas[tt],1.1*MPPTmeas[tt])) for tt ∈ findall(MPPTmeas .> 0)]
+    end
+    
     # Add forecast
     @parameter_function(model, PpvMPPT == (t) -> MPPTnoisy[zero_order_time_index(Dt, t)])
 
@@ -89,7 +92,7 @@ The `st` function calculates the solar thermal power based on the given model an
 - `model::InfiniteModel`: The updated model object.
 Note: The curtailment part of the code is currently commented out and left for future implementation.
 """
-function st!(model::InfiniteModel, data::Dict) # solar thermal 
+function st!(model::InfiniteModel, data::Dict; add_noise::Bool = true) # solar thermal 
     # The thermal pv/heatpipes are only the converted measurement of the irradiance.
     t = model[:t]; 
     Dt = supports(t);
@@ -104,8 +107,10 @@ function st!(model::InfiniteModel, data::Dict) # solar thermal
     # Extract data
     MPPTmeas = data["SPV"].MPPTData[it0:itend];
     # simulated forecast
-    MPPTnoisy = zeros(size(MPPTmeas));
-    MPPTnoisy[MPPTmeas .> 0] = [rand(Uniform(0.5*MPPTmeas[tt],1.1*MPPTmeas[tt])) for tt ∈ findall(MPPTmeas .> 0)]
+    MPPTnoisy = copy(MPPTmeas);
+    if add_noise
+        MPPTnoisy[MPPTmeas .> 0] = [rand(Uniform(0.5*MPPTmeas[tt],1.1*MPPTmeas[tt])) for tt ∈ findall(MPPTmeas .> 0)]
+    end
     @parameter_function(model, Pst == (t) -> ηST*MPPTnoisy[zero_order_time_index(Dt, t)])
 
     #= Curtailment is left for the future
@@ -256,7 +261,7 @@ This function adds the thermal balance to the EMS model.
 - `model::InfiniteModel`: The updated InfiniteModel object with the thermal power balance constraint.
 
 """
-function gridThermal!(model::InfiniteModel, sets::modelSettings, data::Dict) # thermal grid
+function gridThermal!(model::InfiniteModel, sets::modelSettings, data::Dict; add_noise::Bool = true) # thermal grid
     # Load data
     Dt = sets.dTime;
     t = model[:t]; 
@@ -266,10 +271,13 @@ function gridThermal!(model::InfiniteModel, sets::modelSettings, data::Dict) # t
     itend = it0+length(Dt)-1;
     # make InfiniteOpt compatible Plt(t) work for arbitrary times
     loadTh = data["grid"].loadTh[it0:itend];
-    # white noise to simulate a forecast
-    εₗᵗʰ= randn(Int(length(loadTh)*Δt/3600)) .* 0.05 # 50W
-    εₗᵗʰ = repeat(εₗᵗʰ, inner = Int(3600/Δt))
-    loadTh = loadTh .+ εₗᵗʰ; # add noise
+    if add_noise
+        # white noise to simulate a forecast
+        εₗᵗʰ= randn(Int(length(loadTh)*Δt/3600)) .* 0.05 # 50W
+        εₗᵗʰ = repeat(εₗᵗʰ, inner = Int(3600/Δt))
+        loadTh = loadTh .+ εₗᵗʰ; # add noise
+        loadTh[loadTh .< 0] .= 0
+    end
     @parameter_function(model, Plt == (t) -> loadTh[zero_order_time_index(Dt, t)])
     
     # When there´s no FCR then there´s no decision variable Ppve hence Pst can just be a @parameter_function.
@@ -294,7 +302,7 @@ This function adds the power balance to the EMS model.
 - `model::InfiniteModel`: The updated InfiniteModel object with the power balance constraint.
 
 """
-function pei!(model::InfiniteModel, sets::modelSettings, data::Dict) # power electronic interface
+function pei!(model::InfiniteModel, sets::modelSettings, data::Dict; add_noise::Bool = true) # power electronic interface
     # Extract data
     Dt = sets.dTime; nEV=sets.nEV;
     t = model[:t];
@@ -304,12 +312,14 @@ function pei!(model::InfiniteModel, sets::modelSettings, data::Dict) # power ele
     itend = it0+length(Dt)-1;
     # Load data
     loadElec = data["grid"].loadE[it0:itend];
-    # white noise to simulate a forecast
-    εₗᵉ= randn(Int(length(loadElec)*Δt/3600)) .* 0.2 # 200W
-    εₗᵉ = repeat(εₗᵉ, inner = Int(3600/Δt))
-    loadElec = loadElec .+ εₗᵉ; # add noise
-    # loadElec can't be negative
-    loadElec[loadElec .< 0] .= 0
+    if add_noise
+        # white noise to simulate a forecast
+        εₗᵉ= randn(Int(length(loadElec)*Δt/3600)) .* 0.2 # 200W
+        εₗᵉ = repeat(εₗᵉ, inner = Int(3600/Δt))
+        loadElec = loadElec .+ εₗᵉ; # add noise
+        # loadElec can't be negative
+        loadElec[loadElec .< 0] .= 0
+    end
     @parameter_function(model, Ple == (t) -> loadElec[zero_order_time_index(Dt, t)])
     
     # Power balance DC busbar
@@ -344,7 +354,7 @@ The function includes weights and picks how to build the objective depending on 
 - `model`: The updated model object.
 
 """
-function costFunction!(model, sets::modelSettings, data::Dict) # Objective function
+function costFunction!(model, sets::modelSettings, data::Dict; add_noise::Bool = true) # Objective function
     W = sets.costWeights;
     Dt = sets.dTime;
     t = model[:t]; 
@@ -357,11 +367,13 @@ function costFunction!(model, sets::modelSettings, data::Dict) # Objective funct
     # In order to stay consistent with the other DenseAxisArray we need matrices, so here hcat does that for us.
     priceBuy=hcat(data["grid"].λ[it0:itend, 1].*1e-3/3600) # convert from €/MWh to €/kWs
     priceSell=hcat(data["grid"].λ[it0:itend, 2].*1e-3/3600) # convert from €/MWh to €/kWs
-    # simulated forecast
-    ελ = randn(Int(length(priceBuy)*Δt/3600)) .* 20*1e-3/3600 # 20 €/MWh noise
-    ελ = repeat(ελ, inner = Int(3600/Δt))
-    priceBuy = priceBuy .+ ελ; # add noise
-    priceSell = priceSell .+ ελ; # add noise
+    if add_noise
+        # simulated forecast
+        ελ = randn(Int(length(priceBuy)*Δt/3600)) .* 20*1e-3/3600 # 20 €/MWh noise
+        ελ = repeat(ελ, inner = Int(3600/Δt))
+        priceBuy = priceBuy .+ ελ; # add noise
+        priceSell = priceSell .+ ελ; # add noise
+    end
     @parameter_function(model, λbuy == (t) -> priceBuy[zero_order_time_index(Dt, t)])
     @parameter_function(model, λsell == (t) -> priceSell[zero_order_time_index(Dt, t)])
     # Def cost

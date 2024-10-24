@@ -362,6 +362,7 @@ end
     i0::Float64=1.5; # exchange current of the intercalation current [A/m2]
     kSEI::Float64=66.85; # kinetic rate [1/√sec] CHECK
     ESEI::Float64=39146.0;# Activation energy [J/mol]
+    initT::Float64=900.; # initial life time [s]
     δSEI0::Float64=2.0-9; # initial value of the SEI layer thickness [m]
     # initδSEI::Float64=2.0-4; # initial value of the SEI layer thickness [m]
     

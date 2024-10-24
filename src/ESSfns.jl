@@ -577,10 +577,10 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
     
     if type == "empirical"
     # Empirical from Wang et al (2014)
-        @unpack c=AgingParameters
+        @unpack c, initT = AgingParameters
 
         ilossCyclebess = c[1]*c[3]/c[4]*ℯ^(c[2]*abs(ibess))*(1-SoCbess)*abs(ibess); # cyclic aging
-        ilossCalbess = c[5]*√t* ℯ^(-24e3/R/T); # calendar aging
+        ilossCalbess = c[5]*√(initT + t)* ℯ^(-24e3/R/T); # calendar aging
         @constraints(model, begin
             ilossbess .== ilossCyclebess + ilossCalbess # total aging
             ∂.(Qbess, t) .== -ilossbess/3600 # Parameter update, remember unit transf As <-> Ah
@@ -614,7 +614,7 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
             0.6875*tanh((z+0.0117)/0.0529) -
             0.0175*tanh((z-0.5692)/0.0875)
         θ = ℯ^(nSEI*F/R/T*(ηk+OCVn-OCVs)) # fitting param
-        iSEI = (kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ)*√t);
+        iSEI = (kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ)*√(initT+t));
        
     # Loss of Active Material (AM)
         # Parameter list
@@ -678,7 +678,7 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
         end);
     elseif type == "PB Reniers"
     # Physics-based from Reniers et al (2018)
-    @unpack_ReniersAgingParams AgingParameters
+        @unpack_ReniersAgingParams AgingParameters
         iSEI=An*ℯ^(-nSEI*F/R/T*η_neg)/((nSEI*F*kSEI*ℯ^(-nSEI*F/R/T*(OCVn-OCVs)))^-1+δ/nSEI/F/DSEI)
         # particular variables for aging-submodel
         @variable(model, 0 ≤ δSEIbess, Infinite(t)); # SEI layer thickness [m]
@@ -720,11 +720,11 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData)
 
     if type == "empirical"
     # Empirical from Wang et al (2014)
-        @unpack c=agingParams # should change in the future.
+        @unpack c, initT = agingParams # should change in the future.
 
         # Empirical from Wang et al (2014) doi: 10.1016/j.jpowsour.2014.07.030
         ilossCycleev = [c[1]*c[3]/c[4]*ℯ^(c[2]*abs(model[:iev][n]))*(1-model[:SoCev][n])*abs(model[:iev][n]) for n in 1:nEV]; # cyclic aging
-        ilossCalev = c[5]*√t* ℯ^(-24e3/R/T); # calendar aging
+        ilossCalev = c[5]*√(initT+t)* ℯ^(-24e3/R/T); # calendar aging
         @constraints(model, begin
             [n ∈ 1:nEV], ilossev[n] .== ilossCycleev[n] + ilossCalev # total aging
             [n ∈ 1:nEV], ∂.(Qev[n], t) .== -ilossev[n]/3600 # Parameter update, remember unit transf As <-> Ah
@@ -759,7 +759,7 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData)
             0.6875*tanh((z[n]+0.0117)/0.0529) -
             0.0175*tanh((z[n]-0.5692)/0.0875) for n in 1:nEV] 
         θ =[ℯ^(nSEI*F/R/T*(ηk[n]+OCVn[n]-OCVs)) for n in 1:nEV]  # fitting param
-        iSEI = [(kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ[n])*√t) for n in 1:nEV];
+        iSEI = [(kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ[n])*√(initT+t)) for n in 1:nEV];
         
     # Loss of Active Material (AM)
         # Parameter list
@@ -867,23 +867,46 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::Vector{EVD
 
     if type == "empirical"
     # Empirical from Wang et al (2014)
-        @unpack c=agingParams[1] # should change in the future.
-
-        # Empirical from Wang et al (2014) doi: 10.1016/j.jpowsour.2014.07.030
-        ilossCycleev = [c[1]*c[3]/c[4]*ℯ^(c[2]*abs(model[:iev][n]))*(1-model[:SoCev][n])*abs(model[:iev][n]) for n in 1:nEV]; # cyclic aging
-        ilossCalev = c[5]*√t* ℯ^(-24e3/R/T); # calendar aging
+        @expression(model, ilossCycleev[n ∈ 1:nEV], 0.); 
+        @expression(model, ilossCalev[n ∈ 1:nEV], 0.)
+        cev=[]; initTev=zeros(nEV);
+        for n ∈ 1:nEV
+            @unpack c, initT = agingParams[n] # should change in the future.
+            # Empirical from Wang et al (2014) doi: 10.1016/j.jpowsour.2014.07.030
+            push!(cev, c); initTev[n] = initT;
+        end
+        ilossCycleev = [cev[n][1]*cev[n][3]/cev[n][4]*ℯ^(cev[n][2]*abs(model[:iev][n]))*(1-model[:SoCev][n])*abs(model[:iev][n]) for n ∈ 1:nEV]; # cyclic aging
+        ilossCalev = [cev[n][5]*√(initTev[n]+t)* ℯ^(-24e3/R/T) for n ∈ 1:nEV]; # calendar aging
         @constraints(model, begin
-            [n ∈ 1:nEV], ilossev[n] .== ilossCycleev[n] + ilossCalev # total aging
+            [n ∈ 1:nEV], ilossev[n] .== ilossCycleev[n] + ilossCalev[n] # total aging
             [n ∈ 1:nEV], ∂.(Qev[n], t) .== -ilossev[n]/3600 # Parameter update, remember unit transf As <-> Ah
             [n ∈ 1:nEV], Qev[n](t0) .== Qev0[n] # Initial cell capacity
         end);
     elseif type == "PB Jin"
     # Physics-based from Jin (2022)
     # Most equations and values come from Jin (2022), a small piece comes from Jin (2017) the original modeling paper.
-        bPev=model[:bPev]; 
-        # R0ev=model[:R0ev];
-        @unpack_JinAgingParams agingParams[1] # should change in the future.
-        Tref=T; # Reference temperature [K]
+        bPev=model[:bPev]; # R0ev=model[:R0ev];
+        initTev = zeros(nEV);
+        z100pev = zeros(nEV); z0pev = zeros(nEV)
+        nSEIev = zeros(nEV); λev = zeros(nEV)
+        OCVsev = zeros(nEV); OCVnev = zeros(nEV)
+        asev = zeros(nEV); Anev = zeros(nEV)
+        Lnev = zeros(nEV); i0ev = zeros(nEV)
+        kSEIev = zeros(nEV); ESEIev = zeros(nEV)
+        MSEIev = zeros(nEV); ρSEIev = zeros(nEV)
+        kAMev = zeros(nEV); EAMev = zeros(nEV)
+        for n ∈ 1:nEV
+            @unpack_JinAgingParams agingParams[n] # should change in the future.
+            initTev[n] = initT
+            z100pev[n] = z100p; z0pev[n] = z0p;
+            nSEIev[n] = nSEI; λev[n] = λ;
+            OCVsev[n] = OCVs; OCVnev[n] = OCVn;
+            asev[n] = as; Anev[n] = An;
+            Lnev[n] = Ln; i0ev[n] = i0;
+            kSEIev[n] = kSEI; ESEIev[n] = ESEI;
+            MSEIev[n] = MSEI; ρSEIev[n] = ρSEI;
+            kAMev[n] = kAM; EAMev[n] = EAM;
+        end
     # SEI layer.
         # Parameters list
         # nSEI: number of electrons transferred in the SEI side-reaction;
@@ -898,22 +921,22 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::Vector{EVD
         # ESEI: activation energy of SEI side-reaction [J/mol]
         # MSEI: molar weight of the SEI layer [kg/mol]
         # ρSEI: density of the SEI layer [kg/m3]
-        ηk=[2*R*T/F*asinh(iev[n]/nSEI/as/An/Ln/i0) for n in 1:nEV] # kinetic overpotential
-        z = [SoCev[n]*(z100p-z0p)+z0p for n in 1:nEV]
+        ηk=[2*R*T/F*asinh(iev[n]/nSEIev[n]/asev[n]/Anev[n]/Lnev[n]/i0ev[n]) for n ∈ 1:nEV] # kinetic overpotential
+        z = [SoCev[n]*(z100pev[n]-z0pev[n])+z0pev[n] for n ∈ 1:nEV]
         OCVn = [0.6379+0.5416*ℯ^(-305.5309*z[n]) +
             0.044*tanh(-(z[n]-0.1958)/0.1088) -
             0.1978*tanh((z[n]-1.0571)/0.0854) -
             0.6875*tanh((z[n]+0.0117)/0.0529) -
-            0.0175*tanh((z[n]-0.5692)/0.0875) for n in 1:nEV] 
-        θ =[ℯ^(nSEI*F/R/T*(ηk[n]+OCVn[n]-OCVs)) for n in 1:nEV]  # fitting param
-        iSEI = [(kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ[n])*√t) for n in 1:nEV];
+            0.0175*tanh((z[n]-0.5692)/0.0875) for n ∈ 1:nEV] 
+        θ =[ℯ^(nSEIev[n]*F/R/T*(ηk[n]+OCVn[n]-OCVsev[n])) for n ∈ 1:nEV]  # fitting param
+        iSEI = [(kSEIev[n]*ℯ^(-ESEIev[n]/R/T))/(nSEIev[n]*(1+λev[n]*θ[n])*√(initTev[n]+t)) for n ∈ 1:nEV];
         
     # Loss of Active Material (AM)
         # Parameter list
         # kAM = kAM⁰/εAM⁰, [1/Ah]
         # EAM: activation energy [J/mol]
         # iAM =[kAM*ℯ^(-EAM/R/T)*SoCev[n]*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n]*3600 for n in 1:nEV];
-        iAM =[kAM*ℯ^(-EAM/R/T)*SoCev[n]*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n] for n in 1:nEV];
+        iAM =[kAMev[n]*ℯ^(-EAMev[n]/R/T)*SoCev[n]*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n] for n in 1:nEV];
 
     # Lithium Plating
         # Parameter list:

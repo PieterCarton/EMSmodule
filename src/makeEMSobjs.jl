@@ -325,6 +325,7 @@ end
     # 1. empirical:
     type="empirical";
     c::Array{Float64}= [0.0008, 0.39, 1.035, 50, 14.876/√(24*3600)]; # ref values, cathd: NMC+LMO anode: graphite
+    initT::Float64=900.; # initial life time
     iloss0::Float64=0.0; # initial value of the capacity fade current
 end
 
@@ -419,7 +420,8 @@ end
     Ln::Float64=50e-6; # Thickness of anode [m]
     i0::Float64=1.5; # exchange current of the intercalation current [A/m2]
     kSEI::Float64=66.85; # kinetic rate [1/√sec]
-    ESEI::Float64=39146;# Activation energy [J/mol]
+    ESEI::Float64=39146; # Activation energy [J/mol]
+    initT::Float64=900.; # initial life time [s]
 
     # Yang (2017) & Safari (2009) [3,4]
     MSEI::Float64=0.162; # molecular weight of the SEI layer [kg/mol]

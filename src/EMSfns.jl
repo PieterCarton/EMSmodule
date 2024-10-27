@@ -42,7 +42,8 @@ function spv!(model::InfiniteModel, data::Dict; add_noise::Bool = true) # solar 
     Dt = supports(t);
     t0 = supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
     # make new time window
-    it0 = round(Int,(t0/Δt));
+    # it0 = round(Int,(t0/Δt));
+    it0 = ceil(Int,t0/Δt);
     itend = it0+length(supports(t))-1;
     
     MPPTmeas = data["SPV"].MPPTData[it0:itend];

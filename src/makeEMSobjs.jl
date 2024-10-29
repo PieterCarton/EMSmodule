@@ -182,6 +182,9 @@ end
     MPPTData::Array # array of MPPT measurement
 end
 
+# Connection def
+abstract type ConnectionData end
+
 # Storage asset def
 abstract type StorageAssetData end
 
@@ -616,7 +619,7 @@ end
     capex::Float64=300; # capital expenditure [USD/kW]
 end;
 
-@with_kw mutable struct gridData
+@with_kw mutable struct gridData <: ConnectionData
     PowerLim::Array{Float64} # Max-Min power [kW]
     η::Float64 # multiport-converter efficiency [p.u.]
     λ::Array # energy prices. [buy; sell] 

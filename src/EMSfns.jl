@@ -285,6 +285,7 @@ function gridThermal!(model::InfiniteModel, sets::modelSettings, data::Dict; add
     ηHP=data["HP"].η; # conversion factor from Electric to thermal heat pump
     # Thermal Power balance
     model[:thBalance]=@constraint(model, model[:Pst]+model[:Phpe].*ηHP+model[:Ptess] .==  Plt);
+    set_start_value_function(model[:Ptess], t -> loadTh[zero_order_time_index(Dt, t)])
     return model;
 end;
 
@@ -312,6 +313,7 @@ function pei!(model::InfiniteModel, sets::modelSettings, data::Dict; add_noise::
     itend = it0+length(Dt)-1;
     # Load data
     loadElec = data["grid"].loadE[it0:itend];
+    MPPTmeas = data["SPV"].MPPTData[it0:itend];
     if add_noise
         # white noise to simulate a forecast
         εₗᵉ= randn(Int(length(loadElec)*Δt/3600)) .* 0.2 # 200W
@@ -334,7 +336,7 @@ function pei!(model::InfiniteModel, sets::modelSettings, data::Dict; add_noise::
     Phpe = any(name.(all_variables(model)) .== "Phpe") ? model[:Phpe] : 0
 
     model[:powerBalance]=@constraint(model, model[:PpvMPPT] + model[:Pbess] + Pev_sum + model[:Pg] .== Ple + Phpe)
-
+    set_start_value_function(model[:Pg], t -> loadElec[zero_order_time_index(Dt, t)] .- MPPTmeas[zero_order_time_index(Dt, t)])
     return model;
 end;
 

@@ -109,7 +109,12 @@ function update_stgAsset_deg!(stgAsset::BESSData, results::Dict, key::String; ty
 end
 
 # Now we calculate the aging independently for each of the storage devices
-function simulate_storage_asset_deg!(stgAsset::BESSData, perfModel::CIDRAPBROMPerfParams, results::Dict, key::String; typeOpt::String="MPC")
+function simulate_storage_asset_deg!(stgAsset::BESSData,
+    perfModel::CIDRAPBROMPerfParams,
+    results::Dict,
+    key::String;
+    typeOpt::String="MPC"
+    )
     @assert typeOpt ∈ ["MPC", "day-ahead"];
     typeOpt == "MPC" ? shift = 1 : nothing;
     # take the length from results because its the one handled by handleInfeasible()
@@ -375,7 +380,7 @@ function simulate_storage_asset!(stgAsset::TESSData, results::Dict, key::String;
             # check if the TESS is being overcharged
             if (SoC0 .- PsaOpt .* Δt .* stgAsset.η ./ stgAsset.Q / 3600) > stgAsset.SoCLim[2]
                 # check if the TESS approaching from below or above the SoCmax
-                if SoCsa0 < stgAsset.SoCLim[2]
+                if SoC0 < stgAsset.SoCLim[2]
                     SoCsa = copy(stgAsset.SoCLim[2]); # SoCₜ₊₁ --> SoCmax
                     # reduce the power to avoid overcharging and reach SoCmax
                     PsaOpt = (stgAsset.SoCLim[2] - SoC0) / Δt / stgAsset.η * stgAsset.Q * 3600;

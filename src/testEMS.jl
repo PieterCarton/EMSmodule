@@ -158,7 +158,6 @@ function testSoC(results::Dict, data::Dict)
         end
     end
     
-
     # TESS
     Ptess = results["Ptess"]; SoCtess = results["SoCtess"];
     Qtess = data["TESS"].Q; ηtess = data["TESS"].η;

@@ -198,7 +198,8 @@ function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
     # @constraint(model, Ptess(t0).== Ptess0)
 
     # Bucket model
-    @constraint(model, ∂.(SoCtess, t) .== -ηtess*Ptess/Qtess/3600);
+    # @constraint(model, ∂.(SoCtess, t) .== -ηtess*Ptess/Qtess/3600);
+    @constraint(model, ∂.(SoCtess, t) .== -Ptess/Qtess/3600);
     # @constraints(model, begin
     #     SoCtess(t0+(Tw+Δt)/2) .- SoCtess(t0) .≤ 0.05
     #     SoCtess(t0+(Tw+Δt)/2) + 0.05 .≤ SoCtessMax

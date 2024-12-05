@@ -21,7 +21,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
     @unpack ocvLine = OCVParam;
     Npbess = Np; Nsbess = Ns; 
     Qbess0 = initQ*SoHQ; ηbess = η;
-    Pbess0 = P0; PbessMax = PowerLim[2]; # Max power [kW]
+    PbessMax = PowerLim[2]; # Max power [kW]
     SoCbess0 = SoC0;
     aOCV=ocvLine[1]; bOCV=ocvLine[2];
     vmin = vLim[1]; # Min voltage [V]
@@ -34,7 +34,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
         @variables(model, begin
             # aOCV ≤ OCVbess ≤ aOCV+bOCV, Infinite(t), (start=OCVbess0) # open circuit voltage of the cell
             vmin ≤ OCVbess ≤ vmax, Infinite(t), (start=OCVbess0) # open circuit voltage of the cell
-            -imax ≤ ibess ≤ imax, Infinite(t), (start=1e3*Pbess0/Npbess/Nsbess/OCVbess0) # current per branch
+            -imax ≤ ibess ≤ imax, Infinite(t), (start=0) # current per branch
         end); 
     
     # Initial conditions
@@ -607,7 +607,7 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
         # ESEI: activation energy of SEI side-reaction [J/mol]
         # MSEI: molar weight of the SEI layer [kg/mol]
         # ρSEI: density of the SEI layer [kg/m3]
-        ηk=2*R*T/F*asinh(ibess/nSEI/as/An/Ln/i0) # kinetic overpotential
+        ηk = 2*R*T/F*asinh(ibess/nSEI/as/An/Ln/i0) # kinetic overpotential    
         z = SoCbess*(z100p-z0p)+z0p
         OCVn = 0.6379+0.5416*ℯ^(-305.5309*z) +
             0.044*tanh(-(z-0.1958)/0.1088) -
@@ -616,7 +616,19 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
             0.0175*tanh((z-0.5692)/0.0875)
         θ = ℯ^(nSEI*F/R/T*(ηk+OCVn-OCVs)) # fitting param
         iSEI = (kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ)*√(initT+t));
-       
+
+        # @expressions(model, begin
+        #     ηk, 2*R*T/F*asinh(ibess/nSEI/as/An/Ln/i0) # kinetic overpotential    
+        #     z, SoCbess*(z100p-z0p)+z0p
+        #     OCVn, 0.6379+0.5416*ℯ^(-305.5309*z) +
+        #     0.044*tanh(-(z-0.1958)/0.1088) -
+        #     0.1978*tanh((z-1.0571)/0.0854) -
+        #     0.6875*tanh((z+0.0117)/0.0529) -
+        #     0.0175*tanh((z-0.5692)/0.0875)
+        #     θ, ℯ^(nSEI*F/R/T*(ηk+OCVn-OCVs)) # fitting param
+        #     iSEI, (kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ)*√(initT+t));    
+        # end)
+
     # Loss of Active Material (AM)
         # Parameter list
         # kAM = kAM⁰/εAM⁰, [1/Ah]
@@ -1047,15 +1059,10 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
         PbessNeg * (1/ηbess) + PbessPos * ηbess .== Pbess
         bPbess*PbessMin ≤ PbessNeg
         PbessPos ≤ (1-bPbess)*PbessMax
+        # Initial conditions
+        SoCbess(t0) ==  SoCbess0
     end);
-    
-    # Initial conditions
-    # @constraints(model,begin
-    #     SoCbess(t0) ==  SoCbess0
-    #     SoCbess(t1) ==  SoCbess(t1+24*3600-Δt) # periodic condition
-    # end);
-    
-    @constraint(model, initC, SoCbess(t0) ==  SoCbess0) # Initial condition
+
     if termCond ≥ 0.
         t1 = t0 + termCond*3600
         @constraint(model, termC, SoCbess(t1) ==  SoCbess(t1+24*3600-Δt)) # periodic condition
@@ -1116,9 +1123,7 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
         [n ∈ 1:nEV], PevNeg[n] * (1/ηev[n]) + PevPos[n] * ηev[n] == Pev[n]
         [n ∈ 1:nEV], bPev[n]*PevMin[n] ≤ PevNeg[n]
         [n ∈ 1:nEV], PevPos[n] ≤ (1-bPev[n])*PevMax[n]
-    end);
-    # Initial conditions
-    @constraints(model, begin
+        # Initial conditions
         [n ∈ 1:nEV], SoCev[n](t0) == SoCev0[n] 
     end);
     # Operation model

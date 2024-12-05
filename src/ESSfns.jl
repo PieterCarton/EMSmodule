@@ -330,9 +330,9 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
                 # aOCV[n] ≤ vtev[n ∈ 1:nEV] ≤ aOCV[n]+bOCV[n], Infinite(t), (start=OCVev0[n]) # terminal voltage of the cell
                 vmin[n] ≤ OCVev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t), (start=OCVev0[n]) # open circuit voltage of the cell
                 vmin[n] ≤ vtev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t), (start=OCVev0[n]) # terminal voltage of the cell
-                -imax[n] ≤ iev[1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # total current per branch
-                -imax[n] ≤ ilossev[1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # total aging
-                -imax[n] ≤ iR1ev[1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # pole current
+                -imax ≤ iev[1:nEV] ≤ imax, Infinite(t), (start=0.0) # total current per branch
+                -imax ≤ ilossev[1:nEV] ≤ imax, Infinite(t), (start=0.0) # total aging
+                -imax ≤ iR1ev[1:nEV] ≤ imax, Infinite(t), (start=0.0) # pole current
                 0.8*Qev0[n] .≤ Qev[n ∈ 1:nEV] .≤ Qev0[n], Infinite(t), (start=Qev0[n]) # cell capacity
                 # R0ev0[n] .≤ R0ev[n ∈ 1:nEV] .≤ R0ev0[n]*1.2, Infinite(t), (start=R0ev0[n]) # cell capacity
             end);

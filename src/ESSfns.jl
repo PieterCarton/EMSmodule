@@ -48,7 +48,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
         @constraints(model, begin
             OCVbess == aOCV+bOCV*model[:SoCbess] # Linear voltage model
             # OCVbess == OCVfromSOCtemp(SoCbess, T, data["BESS"]) # Lookup table voltage model
-            ibess == 1e3*model[:Pbess]/Npbess/Nsbess/OCVbess # current per branch. 1e3 to convert kW->W
+            # ibess == 1e3*model[:Pbess]/Npbess/Nsbess/OCVbess # current per branch. 1e3 to convert kW->W
+            ibess * OCVbess == 1e3*model[:Pbess]/Npbess/Nsbess # current per branch. 1e3 to convert kW->W
         end);
         
         if sets.costWeights[3] != 0 # Aging check

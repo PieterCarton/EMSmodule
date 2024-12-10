@@ -48,7 +48,6 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
         @constraints(model, begin
             OCVbess == aOCV+bOCV*model[:SoCbess] # Linear voltage model
             # OCVbess == OCVfromSOCtemp(SoCbess, T, data["BESS"]) # Lookup table voltage model
-            # ibess == 1e3*model[:Pbess]/Npbess/Nsbess/OCVbess # current per branch. 1e3 to convert kW->W
             ibess * OCVbess == 1e3*model[:Pbess]/Npbess/Nsbess # current per branch. 1e3 to convert kW->W
         end);
         
@@ -97,7 +96,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
 
     # Model constraints
         @constraints(model, begin
-            ibess == 1e3*model[:Pbess]/Npbess/Nsbess/vtbess # current per branch. 1e3 to convert kW->W
+            ibess * vtbess == 1e3*model[:Pbess]/Npbess/Nsbess # current per branch. 1e3 to convert kW->W
             # Transition function
             ∂.(model[:SoCbess], t)* 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 * 1e3 # Aging Qbess
             ∂.(iR1bess, t) * 1e3 .== (-1 ./taubess*iR1bess+1 ./taubess*ibess) * 1e3 # RC resistor currents
@@ -303,7 +302,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
             availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
             [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
             # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
-            [n ∈ 1:nEV], iev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n]/OCVev[n] # current per branch     
+            [n ∈ 1:nEV], iev[n] * OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch     
         end);
         if sets.costWeights[3] != 0 # Aging check
                 @variables(model, begin
@@ -348,7 +347,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
         # Model constraints
             @constraints(model, begin
                 availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
-                [n ∈ 1:nEV], iev[n] == 1e3*model[:PevTot][n]/Npev[n]/Nsev[n]/vtev[n] # current per branch. 1e3 to convert kW->W
+                [n ∈ 1:nEV], iev[n] * vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
                 # Transition function
                 [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
                 [n ∈ 1:nEV], ∂.(iR1ev[n], t) * 1e3 .== (-1/tauev[n]*iR1ev[n]+1/tauev[n]*iev[n]) * 1e3 # RC resistor currents
@@ -481,7 +480,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
            availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
            [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
            # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
-           [n ∈ 1:nEV], iev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n]/OCVev[n] # current per branch     
+           [n ∈ 1:nEV], iev[n] .* OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch     
        end);
     if sets.costWeights[3] != 0 # Aging check
             @variables(model, begin
@@ -526,7 +525,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     # Model constraints
         @constraints(model, begin
             availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
-            [n ∈ 1:nEV], iev[n] == 1e3*model[:PevTot][n]/Npev[n]/Nsev[n]/vtev[n] # current per branch. 1e3 to convert kW->W
+            [n ∈ 1:nEV], iev[n] .* vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
             # Transition function
             [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
             [n ∈ 1:nEV], ∂.(iR1ev[n], t) * 1e3 .== (-1/tauev[n]*iR1ev[n]+1/tauev[n]*iev[n]) * 1e3 # RC resistor currents

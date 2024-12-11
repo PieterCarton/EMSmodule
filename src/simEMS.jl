@@ -2,9 +2,9 @@
 # This file contains the functions used for simulating a Multicarrier Energy System for a given power setpoint.
 
 # By: Darío Slaifstein, PhD-student @TU Delft, DCES.
-# Branch: ageingModelling_v2
+# Branch: main
 # Version: 1.5
-# Date: 26/09/2024
+# Date: 06/12/2024
 
 function perfModel_matching(stgAsset::BESSData)
     if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
@@ -231,7 +231,6 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     perfModel = perfModel_matching(stgAsset)
 
     if typeOpt == "MPC"
-        # tk = copy(results[:"t"][shift]); # time vector
         tk = copy(results[:"t"][shift+1]); # time vector
     else
         tk = copy(results[:"t"][1:shift+1]); # time vector
@@ -249,19 +248,21 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
         PsaOpt = repeat([PsaOpt], inner=upSampRatio)
     else # typeOpt == "day-ahead"
         PsaOpt = copy(results["P$key"][1:shift+1]); # [kW]
+        # QUICK FIX check
+        # if in the lower limit the first action can't be a discharge
+        if PsaOpt[1] > 0. && (stgAsset.GenInfo.SoC0 .- stgAsset.GenInfo.SoCLim[1] .≤ 1e-4)
+            PsaOpt[1] = 0.
+        end
         PsaOpt = repeat(PsaOpt, inner=upSampRatio)
     end
     # we adapt for the packs series and parallel cells and the units
-    PsaOpt = 1e3*PsaOpt / stgAsset.GenInfo.Ns / stgAsset.GenInfo.Np;
-    
-    # The idea is to simulate the storage asset 
-    # Tk = stgAsset.GenInfo.Tk; # Time constant
+    PsaOpt = 1e3*PsaOpt ./ stgAsset.GenInfo.Ns ./ stgAsset.GenInfo.Np;
+    # The idea is to simulate the storage asset
     Tk = ones(size(PsaOpt))*perfModel.Cell.Const.T # Cell Temperature;
 
     # Update the PBROM matrices
     SoC0 = copy(stgAsset.GenInfo.SoC0); # Starting SOC
-    # SList = collect(1:-0.1:stgAsset.GenInfo.SoCLim[1]) # List of SOC points for model generation
-    SList = [collect(1.0:-0.1:0.2); 0.15] # List of SOC points for model generation
+    stgAsset.cellID == "SYNSANYO" ? SList = [1.0, 0.15] : SList = [0.95, 0.1] # List of SOC points for model generation
     Sₑ = 4 # Spatial points in electrolyte
     Sₛ = 2 # Spatial point in solid
     # Spatial!(perfModel.Cell, Sₑ, Sₛ) # ideally we should be using this instead of Base.invokelatest(), but there is an issue with LiiBRA.jl
@@ -274,9 +275,10 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     # Calculate the transition Sₛₐ,ₜ₊₁==Sᴹ(Sₛₐ,ₜ , Pₛₐₜ*, Wₜ₊₁)
     # stgVars, ~ = Simulate(perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
     stgVars, ~ = Base.invokelatest(Simulate, perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
-
+    # check if the solution has NaNs
+    check = false
     if any(isnan.(stgVars.Cell_SOC))
-        println("NaNs in the solution, $key has hit the lower SoC limit.")
+        println("NaNs in the solution, $key is out of bounds.")
         # For the state Sₛₐ,ₜ₊₁, replace NaNs with the last valid value 
         iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the SoC NaNs
         # stgVars.Cell_SOC[iNaN] .= stgAsset.GenInfo.SoCLim[1]; # this assumes its NaN only in the lowerlimit
@@ -294,19 +296,15 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
         vtNaN < stgAsset.GenInfo.vLim[1] ? vtNaN = stgAsset.GenInfo.vLim[1] : nothing;
         vtNaN > stgAsset.GenInfo.vLim[2] ? vtNaN = stgAsset.GenInfo.vLim[2] : nothing;
         stgVars.Cell_V[iNaN] .= vtNaN
-        iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the NaNs
-        stgVars.Cell_SOC[iNaN] .= stgAsset.GenInfo.SoCLim[1];
-        stgVars.Cell_V[iNaN] .= stgAsset.GenInfo.vLim[1];
         # for the actions replace NaNs with 0
         iNaN = isnan.(stgVars.Iapp); # indeces of the NaNs
-        stgVars.Iapp[iNaN] .= 0;
-        PsaOpt[iNaN[1:end-1]] .= 0;
-        # update the results dictionary with PsaOpt
-        PsaOpt = 1e-3*PsaOpt * stgAsset.GenInfo.Ns * stgAsset.GenInfo.Np; # pack power in kW
-        results["P$key"] = copy(PsaOpt[1:upSampRatio:end]); # save the downsampled array
+        stgVars.Iapp[iNaN] .= 0.;
+        PsaOpt[iNaN[1:end-1]] .= 0.;
+        check = true
     end
     # ensure that the SoC is within the limits
     if any(stgVars.Cell_SOC .< stgAsset.GenInfo.SoCLim[1]) || any(stgVars.Cell_SOC .> stgAsset.GenInfo.SoCLim[2])
+        println("SoC out of bounds.")
         iMin = stgVars.Cell_SOC .< stgAsset.GenInfo.SoCLim[1]
         iMax = stgVars.Cell_SOC .> stgAsset.GenInfo.SoCLim[2]
         # replace the SoC values that are out of bounds
@@ -319,10 +317,14 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
         stgVars.Iapp[findall(iMin .| iMax)] .= 0.;
         PsaOpt[findall(iMin[1:end-1])] .= 0.;
         PsaOpt[findall(iMax[1:end-1])] .= 0.;
-        # update the results dictionary with PsaOpt
+        check = true
+    end
+    # update the results dictionary with PsaOpt
+    if check
         PsaOpt = 1e-3*PsaOpt * stgAsset.GenInfo.Ns * stgAsset.GenInfo.Np; # pack power in kW
         results["P$key"] = copy(PsaOpt[1:upSampRatio:end]); # save the downsampled array
     end
+
     # Update the results dictionary with the Performance Vars
     # modify the key for the EV case. Check if it is "evTot" or "evTot[$n]"
     # if it is "evTot[$n]" then we need to change it to "ev[$n]"
@@ -355,7 +357,6 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     simulate_storage_asset_deg!(stgAsset, perfModel, results, key; typeOpt=typeOpt)
 
     return stgAsset, results
-    # return stgAsset, stgVars
 end
 
 function simulate_storage_asset!(stgAsset::TESSData, results::Dict, key::String; typeOpt::String="MPC")

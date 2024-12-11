@@ -349,7 +349,7 @@ end
     # SEI layer
     nSEI::Float64=2.0; # number of e⁻ transfered in SEI side reaction
     λ::Float64=5.51e-5; # λ=c*ₛ.√Dₛ/c*ₚ.√Dₚ=constant
-    OCVs::Float64=0.4; # OCV of the side reaction  [V]
+    OCVs::Float64=0.; # OCV of the side reaction, cause OCV = 0.4V is included in λ
     # OCV of the anode electrode [V]
     OCVn::Function = (z) ->
         OCVn = @. 0.6379+0.5416*ℯ^(-305.5309*z) +

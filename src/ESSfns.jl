@@ -57,7 +57,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
                 0.8*Qbess0 ≤ Qbess ≤ Qbess0, Infinite(t), (start=Qbess0) # cell capacity
             end);
             @constraints(model, begin
-                ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 * 1e3 # Aging Qbess
+                # ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 * 1e3 # Aging Qbess
+                ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess0/3600 * 1e3 # Aging Qbess
                 Qbess(t0) .== Qbess0;
             end);
         else
@@ -98,7 +99,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
         @constraints(model, begin
             ibess * vtbess == 1e3*model[:Pbess]/Npbess/Nsbess # current per branch. 1e3 to convert kW->W
             # Transition function
-            ∂.(model[:SoCbess], t)* 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 * 1e3 # Aging Qbess
+            # ∂.(model[:SoCbess], t)* 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 * 1e3 # Aging Qbess
+            ∂.(model[:SoCbess], t)* 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess0/3600 * 1e3 # Aging Qbess
             ∂.(iR1bess, t) * 1e3 .== (-1 ./taubess*iR1bess+1 ./taubess*ibess) * 1e3 # RC resistor currents
             #Hysterisis?
             # Output equations
@@ -192,8 +194,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
             # CHECK
             ibess == 1e3*model[:Pbess]/Npbess/Nsbess/vtbess # current per branch. 1e3 to convert kW->W
             # Transition function
-            # ∂.(model[:SoCbess], t) .== -ηbess*ibess/Qbess/3600 # Aging Qbess
-            ∂.(model[:SoCbess], t) .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 # Aging Qbess
+            # ∂.(model[:SoCbess], t) .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 # Aging Qbess
+            ∂.(model[:SoCbess], t) .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess0/3600 # Aging Qbess
             ∂.(xbess[o ∈ nO], t) .== A*xbess[o ∈ nO]+B*ibess # ROM state transition
             # Output equations
             ybess .== C*xbess[o ∈ nO] + D*ibess
@@ -310,7 +312,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
                     0.8*Qev0[n] .≤ Qev[n ∈ 1:nEV] .≤ Qev0[n], Infinite(t) # cell capacity
                 end);
                 @constraints(model, begin
-                    [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+                    # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+                    [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3 # Aging Qev
                     [n ∈ 1:nEV], Qev[n](t0) .== Qev0;
                 end);
             else
@@ -349,7 +352,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
                 availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
                 [n ∈ 1:nEV], iev[n] * vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
                 # Transition function
-                [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+                [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3 # Aging Qev
                 [n ∈ 1:nEV], ∂.(iR1ev[n], t) * 1e3 .== (-1/tauev[n]*iR1ev[n]+1/tauev[n]*iev[n]) * 1e3 # RC resistor currents
                 #Hysterisis?
                 # Output equations
@@ -488,7 +492,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
                 0.8*Qev0[n] .≤ Qev[n ∈ 1:nEV] .≤ Qev0[n], Infinite(t) # cell capacity
             end);
             @constraints(model, begin
-                [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+                [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3 # Aging Qev
                 [n ∈ 1:nEV], Qev[n](t0) .== Qev0;
             end);
         else
@@ -527,7 +532,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
             availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
             [n ∈ 1:nEV], iev[n] .* vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
             # Transition function
-            [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+            # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+            [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3 # Aging Qev
             [n ∈ 1:nEV], ∂.(iR1ev[n], t) * 1e3 .== (-1/tauev[n]*iR1ev[n]+1/tauev[n]*iev[n]) * 1e3 # RC resistor currents
             #Hysterisis?
             # Output equations

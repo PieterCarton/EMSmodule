@@ -614,7 +614,7 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
             0.6875*tanh((z+0.0117)/0.0529) -
             0.0175*tanh((z-0.5692)/0.0875)
         θ = ℯ^(nSEI*F/R/T*(ηk+OCVn-OCVs)) # fitting param
-        iSEI = (kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ)*√(initT+t));
+        iSEI = (kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ)*√(initT+t))*Qbess0;
 
         # @expressions(model, begin
         #     ηk, 2*R*T/F*asinh(ibess/nSEI/as/An/Ln/i0) # kinetic overpotential    
@@ -769,7 +769,7 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData)
             0.6875*tanh((z[n]+0.0117)/0.0529) -
             0.0175*tanh((z[n]-0.5692)/0.0875) for n in 1:nEV] 
         θ =[ℯ^(nSEI*F/R/T*(ηk[n]+OCVn[n]-OCVs)) for n in 1:nEV]  # fitting param
-        iSEI = [(kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ[n])*√(initT+t)) for n in 1:nEV];
+        iSEI = [(kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ[n])*√(initT+t))*Qev0[n] for n in 1:nEV];
         
     # Loss of Active Material (AM)
         # Parameter list
@@ -939,7 +939,7 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::Vector{EVD
             0.6875*tanh((z[n]+0.0117)/0.0529) -
             0.0175*tanh((z[n]-0.5692)/0.0875) for n ∈ 1:nEV] 
         θ =[ℯ^(nSEIev[n]*F/R/T*(ηk[n]+OCVn[n]-OCVsev[n])) for n ∈ 1:nEV]  # fitting param
-        iSEI = [(kSEIev[n]*ℯ^(-ESEIev[n]/R/T))/(nSEIev[n]*(1+λev[n]*θ[n])*√(initTev[n]+t)) for n ∈ 1:nEV];
+        iSEI = [(kSEIev[n]*ℯ^(-ESEIev[n]/R/T))/(nSEIev[n]*(1+λev[n]*θ[n])*√(initTev[n]+t))*Qev0[n] for n ∈ 1:nEV];
         
     # Loss of Active Material (AM)
         # Parameter list

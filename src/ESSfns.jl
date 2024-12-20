@@ -633,7 +633,7 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
         # kAM = kAM⁰/εAM⁰, [1/Ah]
         # EAM: activation energy [J/mol]
         # iAM = kAM*ℯ^(-EAM/R/T)*SoCbess*(-ibess*bPbess + ibess*(1 - bPbess))*Qbess0*3600;
-        iAM = kAM*ℯ^(-EAM/R/T)*SoCbess*(-ibess*bPbess + ibess*(1 - bPbess))*Qbess0;
+        iAM = kAM*ℯ^(-EAM/R/T)*(SoCbess*100)*(-ibess*bPbess + ibess*(1 - bPbess))*Qbess0;
 
     # Lithium Plating
         # Parameter list:
@@ -776,7 +776,7 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData)
         # kAM = kAM⁰/εAM⁰, [1/Ah]
         # EAM: activation energy [J/mol]
         # iAM =[kAM*ℯ^(-EAM/R/T)*SoCev[n]*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n]*3600 for n in 1:nEV];
-        iAM =[kAM*ℯ^(-EAM/R/T)*SoCev[n]*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n] for n in 1:nEV];
+        iAM =[kAM*ℯ^(-EAM/R/T)*(SoCev[n]*100)*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n] for n in 1:nEV];
 
     # Lithium Plating
         # Parameter list:
@@ -946,7 +946,7 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::Vector{EVD
         # kAM = kAM⁰/εAM⁰, [1/Ah]
         # EAM: activation energy [J/mol]
         # iAM =[kAM*ℯ^(-EAM/R/T)*SoCev[n]*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n]*3600 for n in 1:nEV];
-        iAM =[kAMev[n]*ℯ^(-EAMev[n]/R/T)*SoCev[n]*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n] for n in 1:nEV];
+        iAM =[kAMev[n]*ℯ^(-EAMev[n]/R/T)*(SoCev[n]*100)*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n] for n in 1:nEV];
 
     # Lithium Plating
         # Parameter list:

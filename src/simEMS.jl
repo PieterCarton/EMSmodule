@@ -181,7 +181,7 @@ function simulate_storage_asset_deg!(stgAsset::BESSData,
     end
     # AM
     # iAM = kAM*ℯ^(-EAM/R/Tk) * SoCsa .* abs.(isa)*Qsa0*3600;
-    iAM = kAM*ℯ^(-EAM/R/Tk) * SoCsa .* abs.(isa)*Qsa0;
+    iAM = kAM*ℯ^(-EAM/R/Tk) * (SoCsa*100) .* abs.(isa)*Qsa0;
     # # implement Xavier (2021) for Li-plating.
     # # ηoc,k(x) = φs,k(x) − φe,k(x) −Uref,oc − Fjoc,k(x)Rﬁlm,
     # Uref=0;

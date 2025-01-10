@@ -1143,7 +1143,7 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
     # Add variables
     # Pev > 0 -> out power and Pev < 0 -> in power
     @variables(model, begin
-        # Pev[n ∈ 1:nEV], Infinite(t)  # EV charger power 
+        Pev[n ∈ 1:nEV], Infinite(t)  # EV charger power 
         # bPev[n ∈ 1:nEV], Infinite(t), Bin  # EV charger power
         PevTot[n ∈ 1:nEV], Infinite(t)  # total power of each EV, driving+V2G
         SoCevMin[n] .≤ SoCev[n ∈ 1:nEV] .≤ SoCevMax[n], Infinite(t) # State of Charge
@@ -1157,10 +1157,10 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
     
     # Bidirectional power flow, ensuring only export or import
     # [n ∈ 1:nEV], PevNeg[n] + PevPos[n] == Pev[n]
-    @expression(model, Pev[n ∈ 1:nEV], PevPos[n] * ηev[n] .- PevNeg[n] * (1/ηev[n]))
+    # @expression(model, Pev[n ∈ 1:nEV], PevPos[n] * ηev[n] .- PevNeg[n] * (1/ηev[n]))
     @constraints(model, begin
         # Base MPEC 1 Bin
-        # [n ∈ 1:nEV], PevNeg[n] * (1/ηev[n]) + PevPos[n] * ηev[n] == Pev[n]
+        [n ∈ 1:nEV], PevPos[n] * ηev[n] .- PevNeg[n] * (1/ηev[n]) .== Pev[n]
         # [n ∈ 1:nEV], bPev[n]*PevMin[n] ≤ PevNeg[n]
         # [n ∈ 1:nEV], PevPos[n] ≤ (1-bPev[n])*PevMax[n]
         # Alt 1: MPEC 2 Bin

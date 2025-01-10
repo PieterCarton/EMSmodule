@@ -307,11 +307,11 @@ function gridThermal!(model::InfiniteModel, sets::modelSettings, data::Dict; add
     ηHP=data["HP"].η; # conversion factor from Electric to thermal heat pump
     # Thermal Power balance
     model[:thBalance]=@constraint(model, model[:Pst]+model[:Phpe].*ηHP+model[:Ptess] .==  Plt);
-    resLoad = loadElec .- MPPTmeas;
-    resLoad⁺ = copy(resLoad); resLoad⁻ = copy(resLoad);
-    resLoad⁺[resLoad .< 0] .= 0; resLoad⁻[resLoad .> 0] .= 0;
-    set_start_value_function(model[:PgPos], t -> resLoad⁺[zero_order_time_index(Dt, t)])
-    set_start_value_function(model[:PgNeg], t -> -resLoad⁻[zero_order_time_index(Dt, t)])
+    resLoadTh = loadTh .- data["ST"].η * data["SPV"].MPPTData[it0:itend];
+    resLoadTh⁺ = copy(resLoadTh); resLoadTh⁻ = copy(resLoadTh);
+    resLoadTh⁺[resLoadTh .< 0] .= 0; resLoadTh⁻[resLoadTh .> 0] .= 0;
+    set_start_value_function(model[:PtessPos], t -> resLoadTh⁺[zero_order_time_index(Dt, t)])
+    set_start_value_function(model[:PtessNeg], t -> -resLoadTh⁻[zero_order_time_index(Dt, t)])
     return model;
 end;
 

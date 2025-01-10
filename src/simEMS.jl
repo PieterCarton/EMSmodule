@@ -175,13 +175,13 @@ function simulate_storage_asset_deg!(stgAsset::BESSData,
     # θ = ℯ .^ (nSEI*F/R/Tk*(ηk .+ OCVn("Neg", z) .- OCVs))
     θ = ℯ .^ (nSEI*F/R/Tk*(ηk .+ OCVn(z) .- OCVs)) # fitting param
     if typeOpt == "MPC"
-        iSEI = (kSEI*ℯ^(-ESEI/R/Tk)) ./ (nSEI*(1 .+λ .* θ) .* .√ (initT .+ t[1]));
+        iSEI = (kSEI*ℯ^(-ESEI/R/Tk)) ./ (nSEI*(1 .+λ .* θ) .* .√ (initT .+ t[1]))*Qsa0;
     else # typeOpt == "day-ahead"
-        iSEI = (kSEI*ℯ^(-ESEI/R/Tk)) ./ (nSEI*(1 .+λ .* θ) .* .√ (initT .+ t));
+        iSEI = (kSEI*ℯ^(-ESEI/R/Tk)) ./ (nSEI*(1 .+λ .* θ) .* .√ (initT .+ t))*Qsa0;
     end
     # AM
     # iAM = kAM*ℯ^(-EAM/R/Tk) * SoCsa .* abs.(isa)*Qsa0*3600;
-    iAM = kAM*ℯ^(-EAM/R/Tk) * SoCsa .* abs.(isa)*Qsa0;
+    iAM = kAM*ℯ^(-EAM/R/Tk) * (SoCsa*100) .* abs.(isa)*Qsa0;
     # # implement Xavier (2021) for Li-plating.
     # # ηoc,k(x) = φs,k(x) − φe,k(x) −Uref,oc − Fjoc,k(x)Rﬁlm,
     # Uref=0;

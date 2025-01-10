@@ -3,9 +3,9 @@
 # The functions are mainly the device models (solar pv, bess, tess, etc.) and other elements (grid balances) of the EMS problem.
 
 # By: Darío Slaifstein, PhD-student @TU Delft, DCES.
-# Branch: agingModeling
+# Branch: new_mpec_1
 # Version: 1.5
-# Date: 01/09/2023
+# Date: 10/01/2025
 
 ## Modeling functions
 # These functions are used to build the EMS model object. They include the device models, the grid balances and cost function.
@@ -180,17 +180,28 @@ function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
     @variables(model, begin
         # SoCtessMin ≤ SoCtess ≤ SoCtessMax, Infinite(t) # State of Charge
         SoCtess ≥ SoCtessMin, Infinite(t) # State of Charge
-        Ptess, Infinite(t) # Thermal power
-        bPtess, Infinite(t), Bin # Binary variable for TESS power
+        # Ptess, Infinite(t) # Thermal power
+        # bPtess, Infinite(t), Bin # Binary variable for TESS power
         0 ≤ PtessPos, Infinite(t) # Ptess^+ out power
-        PtessNeg ≤ 0, Infinite(t) # Ptess^- in power
+        # PtessNeg ≤ 0, Infinite(t) # Ptess^- in power
+        btess⁺, Infinite(t), Bin # Binary variable for TESS power
+        btess⁻, Infinite(t), Bin # Binary variable for TESS power
+        0 ≤ PtessNeg, Infinite(t)
     end);
     # Dummy variables for bidirectional power flow, ensuring only export or import
+    # PtessNeg + PtessPos .== Ptess
+    @expression(model, Ptess, PtessPos * ηtess .- PtessNeg * (1/ηtess))
     @constraints(model, begin
-        bPtess*PtessMin ≤ PtessNeg
-        # PtessNeg + PtessPos .== Ptess
-        PtessNeg * (1/ηtess) + PtessPos * ηtess .== Ptess
-        PtessPos ≤ (1-bPtess)*PtessMax
+        # Base: MPEC 1 Bin
+        # PtessNeg * (1/ηtess) + PtessPos * ηtess .== Ptess
+        # bPtess*PtessMin ≤ PtessNeg
+        # PtessPos ≤ (1-bPtess)*PtessMax
+        # Alt 1: MPEC 2 Bin
+        btess⁺ .+ btess⁻ .≤ 1
+        PtessNeg ≤ - btess⁻ * PtessMin
+        PtessPos ≤ btess⁺ * PtessMax
+        # Alt 2: with ⟂
+        # PtessNeg ⟂ PtessPos
     end);
     
     # Initial conditions
@@ -231,18 +242,29 @@ function gridConn!(model::InfiniteModel, data::Dict) # power electronic interfac
 
     # Add variables
     @variables(model, begin
-        Pg, Infinite(t)  # grid power
-        bPg, Infinite(t), Bin # Binary variable for Grid power
+        # Pg, Infinite(t)  # grid power
+        # bPg, Infinite(t), Bin # Binary variable for Grid power
+        # PgNeg ≤ 0, Infinite(t), (start=0) # Pg^- in/sell power
+        bg⁺, Infinite(t), Bin
+        bg⁻, Infinite(t), Bin
+        0 ≤ PgNeg, Infinite(t)
         0 ≤ PgPos, Infinite(t) # Pg^+ out/buy power
-        PgNeg ≤ 0, Infinite(t), (start=0) # Pg^- in/sell power
     end)
     
     # Dummy variables for bidirectional power flow, ensuring only export or import
+    # PgNeg + PgPos .== Pg
+    @expression(model, Pg, PgPos * ηg .- PgNeg * (1/ηg))
     @constraints(model, begin
-        PgPos ≤ (1-bPg)*PgMax
-        bPg*PgMin ≤ PgNeg
-        # PgNeg + PgPos .== Pg
-        PgNeg * (1/ηg) + PgPos * ηg .== Pg
+        # Base: MPEC 1 Bin
+        # PgPos ≤ (1-bPg)*PgMax
+        # bPg*PgMin ≤ PgNeg
+        # PgNeg * (1/ηg) + PgPos * ηg .== Pg
+        # Alt 1: MPEC 2 Bin
+        bg⁺ .+ bg⁻ .≤ 1
+        PgNeg ≤ - bg⁻ * PgMin
+        PgPos ≤ bg⁺ * PgMax
+        # Alt 2: with ⟂
+        # PgNeg ⟂ PgPos
     end)
     return model;
 end;
@@ -367,8 +389,8 @@ function costFunction!(model, sets::modelSettings, data::Dict; add_noise::Bool =
 
     # Note: We need to use hcat() to form the axis cause otherwise λ[:,c] broadcasts into a vector.
     # In order to stay consistent with the other DenseAxisArray we need matrices, so here hcat does that for us.
-    priceBuy=hcat(data["grid"].λ[it0:itend, 1].*1e-3/3600) # convert from €/MWh to €/kWs
-    priceSell=hcat(data["grid"].λ[it0:itend, 2].*1e-3/3600) # convert from €/MWh to €/kWs
+    priceBuy=hcat(data["grid"].λ[it0:itend, 1])
+    priceSell=hcat(data["grid"].λ[it0:itend, 2])
     if add_noise
         # simulated forecast
         ελ = randn(Int(length(priceBuy)*Δt/3600)) .* 20*1e-3/3600 # 20 €/MWh noise
@@ -392,6 +414,7 @@ function costFunction!(model, sets::modelSettings, data::Dict; add_noise::Bool =
 
     # Aging costs CHECK
     clossbess = 1.2; # cost of lost capacity EUR/Ah
+    clossbess /= 3600; # cost of lost capacity EUR/As
     Wloss=W[3]; # regularization factor for lost capacity
     if Wloss != 0.
         # cQloss = Wloss != 0 ? ( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600) : 0.0;
@@ -403,7 +426,7 @@ function costFunction!(model, sets::modelSettings, data::Dict; add_noise::Bool =
         else
             lossEV = zeros(sets.nEV);
         end
-        cQloss = ∫(( Wloss*(lossBESS+sum(lossEV[n] for n ∈ 1:sets.nEV))/3600),t);
+        cQloss = ∫(( Wloss*(lossBESS+sum(lossEV[n] for n ∈ 1:sets.nEV))),t);
     else
         cQloss = 0.0;
     end

@@ -307,6 +307,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
             =#
         # Model constraints
         @constraints(model, begin
+            [n ∈ 1:nEV], bev⁻[n] .+ γf .≥ 1
             availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
             [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
             # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
@@ -357,6 +358,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
             end); 
         # Model constraints
             @constraints(model, begin
+                [n ∈ 1:nEV], bev⁻[n] .+ γf .≥ 1
                 availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
                 [n ∈ 1:nEV], iev[n] * vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
                 # Transition function
@@ -492,10 +494,11 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     # Initial conditions   
     # Model constraints
        @constraints(model, begin
-           availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
-           [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
-           # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
-           [n ∈ 1:nEV], iev[n] .* OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch
+            [n ∈ 1:nEV], bev⁻[n] .+ γf .≥ 1
+            availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
+            [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
+            # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
+            [n ∈ 1:nEV], iev[n] .* OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch
        end);
     if sets.costWeights[3] != 0 # Aging check
             @variables(model, begin
@@ -542,6 +545,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
         end); 
     # Model constraints
         @constraints(model, begin
+            [n ∈ 1:nEV], bev⁻[n] .+ γf .≥ 1
             availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
             [n ∈ 1:nEV], iev[n] .* vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
             # Transition function
@@ -1144,7 +1148,7 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
     # Add variables
     # Pev > 0 -> out power and Pev < 0 -> in power
     @variables(model, begin
-        Pev[n ∈ 1:nEV], Infinite(t)  # EV charger power 
+        # Pev[n ∈ 1:nEV], Infinite(t)  # EV charger power 
         # bPev[n ∈ 1:nEV], Infinite(t), Bin  # EV charger power
         PevTot[n ∈ 1:nEV], Infinite(t)  # total power of each EV, driving+V2G
         SoCevMin[n] .≤ SoCev[n ∈ 1:nEV] .≤ SoCevMax[n], Infinite(t) # State of Charge
@@ -1158,15 +1162,14 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
     
     # Bidirectional power flow, ensuring only export or import
     # [n ∈ 1:nEV], PevNeg[n] + PevPos[n] == Pev[n]
-    # @expression(model, Pev[n ∈ 1:nEV], PevPos[n] * ηev[n] .- PevNeg[n] * (1/ηev[n]))
+    @expression(model, Pev[n ∈ 1:nEV], PevPos[n] * ηev[n] .- PevNeg[n] * (1/ηev[n]))
     @constraints(model, begin
         # Base MPEC 1 Bin
-        [n ∈ 1:nEV], PevPos[n] * ηev[n] .- PevNeg[n] * (1/ηev[n]) .== Pev[n]
+        # [n ∈ 1:nEV], PevPos[n] * ηev[n] .- PevNeg[n] * (1/ηev[n]) .== Pev[n]
         # [n ∈ 1:nEV], bPev[n]*PevMin[n] ≤ PevNeg[n]
         # [n ∈ 1:nEV], PevPos[n] ≤ (1-bPev[n])*PevMax[n]
         # Alt 1: MPEC 2 Bin
-        # [n ∈ 1:nEV], bev⁺[n] .+ bev⁻[n] .≤ 1
-        [n ∈ 1:nEV], bev⁺[n] .+ bev⁻[n] .== 1
+        [n ∈ 1:nEV], bev⁺[n] .+ bev⁻[n] .≤ 1
         [n ∈ 1:nEV], PevNeg[n] .≤ - bev⁻[n] .* PevMin[n]
         [n ∈ 1:nEV], PevPos[n] .≤ bev⁺[n] .* PevMax[n]
         # Alt 2: with ⟂

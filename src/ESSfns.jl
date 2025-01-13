@@ -1177,7 +1177,7 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
         # [n ∈ 1:nEV], PevPos[n] ≤ (1-bPev[n])*PevMax[n]
         # Alt 1: MPEC 2 Bin
         # [n ∈ 1:nEV], bev⁺[n] .+ bev⁻[n] .≤ 1
-        [n ∈ 1:nEV], bev⁰ .+ bev⁺[n] .+ bev⁻[n] .> 0
+        [n ∈ 1:nEV], bev⁰ .+ bev⁺[n] .+ bev⁻[n] .≥ 1e-3
         [n ∈ 1:nEV], bev⁰ .+ bev⁺[n] .+ bev⁻[n] .≤ 1
         [n ∈ 1:nEV], PevNeg[n] .≤ - bev⁻[n] .* PevMin[n]
         [n ∈ 1:nEV], PevPos[n] .≤ bev⁺[n] .* PevMax[n]

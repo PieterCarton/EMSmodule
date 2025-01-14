@@ -329,7 +329,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
                 # Static Qbess
                 # @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3)
                 # @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bev⁻[n] + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3)
-                @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * (bev⁻[n] + (1 .- γf)) + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3)
+                # @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * (bev⁻[n] + (1 .- γf)) + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3)
+                @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -iev[n]/Qev0[n]/3600 * 1e3)
             end
     elseif type == "ECM"
         # Model variables

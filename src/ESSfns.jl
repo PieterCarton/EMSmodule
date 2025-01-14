@@ -322,14 +322,14 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
                     # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
                     # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3 # No-Aging Qev
                     # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bev⁻[n] + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
-                    [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * (bev⁻[n] + (1 .- γf[n])) + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
+                    [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * (bev⁻[n] + (1 .- γf)) + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
                     [n ∈ 1:nEV], Qev[n](t0) .== Qev0;
                 end);
             else
                 # Static Qbess
                 # @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3)
                 # @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bev⁻[n] + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3)
-                @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * (bev⁻[n] + (1 .- γf[n])) + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3)
+                @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * (bev⁻[n] + (1 .- γf)) + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3)
             end
     elseif type == "ECM"
         # Model variables
@@ -367,7 +367,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
                 # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
                 # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3 # No-Aging Qev
                 # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bev⁻[n] + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
-                [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * (bev⁻[n] .+ (1 .- γf[n])) + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
+                [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * (bev⁻[n] .+ (1 .- γf)) + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
                 [n ∈ 1:nEV], ∂.(iR1ev[n], t) * 1e3 .== (-1/tauev[n]*iR1ev[n]+1/tauev[n]*iev[n]) * 1e3 # RC resistor currents
                 #Hysterisis?
                 # Output equations

@@ -307,7 +307,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
             =#
         # Model constraints
         @constraints(model, begin
-            [n ∈ 1:nEV], (1 .- γf[n]) .+ bev⁺[n] .+ bev⁻[n] .≤ 1
+            [n ∈ 1:nEV], (1 .- γf) .+ bev⁺[n] .+ bev⁻[n] .≤ 1
             availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
             [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
             # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
@@ -360,7 +360,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
             end); 
         # Model constraints
             @constraints(model, begin
-                [n ∈ 1:nEV], (1 .- γf[n]) .+ bev⁺[n] .+ bev⁻[n] .≤ 1
+                [n ∈ 1:nEV], (1 .- γf) .+ bev⁺[n] .+ bev⁻[n] .≤ 1
                 availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
                 [n ∈ 1:nEV], iev[n] * vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
                 # Transition function

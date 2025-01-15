@@ -61,12 +61,14 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
             @constraints(model, begin
                 # ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 * 1e3 # Aging Qbess
                 # ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess0/3600 * 1e3 # No-Aging Qbess
-                ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bbess⁻ + bbess⁺)*ibess/Qbess0/3600 * 1e3 # Aging Qbess
+                # ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bbess⁻ + bbess⁺)*ibess/Qbess0/3600 * 1e3
+                ∂.(model[:SoCbess], t) * 1e3 .== -ηbess*ibess/Qbess0/3600 * 1e3
                 Qbess(t0) .== Qbess0;
             end);
         else
             # @constraint(model, ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess0/3600 * 1e3) # Static Qbess
-            @constraint(model, ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bbess⁻ + bbess⁺)*ibess/Qbess0/3600 * 1e3) # Static Qbess
+            # @constraint(model, ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bbess⁻ + bbess⁺)*ibess/Qbess0/3600 * 1e3) # Static Qbess
+            @constraint(model, ∂.(model[:SoCbess], t) * 1e3 .== -ηbess *ibess/Qbess0/3600 * 1e3)
         end
     elseif type == "ECM"
     # Model variables
@@ -1089,11 +1091,11 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
         # Pbess, Infinite(t) # output power
         # bPbess, Infinite(t), Bin # Binary variable for output power    
         # PbessNeg ≤ 0, Infinite(t) # Pbess^- in power
-        bbess⁺, Infinite(t), Bin
-        bbess⁻, Infinite(t), Bin
-        0 ≤ PbessPos, Infinite(t) # Pbess^+ out power
-        0 ≤ PbessNeg, Infinite(t)
-    end);
+        # bbess⁺, Infinite(t), Bin
+        # bbess⁻, Infinite(t), Bin
+        0 ≤ PbessPos ≤ PbessMax, Infinite(t) # Pbess^+ out power
+        0 ≤ PbessNeg ≤ -PbessMin, Infinite(t)
+    end)
     
     # Bidirectional power flow, ensuring only export or import
     # PbessNeg + PbessPos .== Pbess
@@ -1104,11 +1106,11 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
         # bPbess*PbessMin ≤ PbessNeg
         # PbessPos ≤ (1-bPbess)*PbessMax
         # Alt 1: MPEC 2 Bin
-        bbess⁺ + bbess⁻ .≤ 1
-        PbessNeg ≤ - bbess⁻ * PbessMin
-        PbessPos ≤ bbess⁺ * PbessMax
+        # bbess⁺ + bbess⁻ .≤ 1
+        # PbessNeg ≤ - bbess⁻ * PbessMin
+        # PbessPos ≤ bbess⁺ * PbessMax
         # Alt 2: with ⟂
-        # PbessPos ⟂ PbessNeg
+        PbessPos ⟂ PbessNeg
         # Initial conditions
         SoCbess(t0) ==  SoCbess0
     end);
@@ -1163,11 +1165,11 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
         PevTot[n ∈ 1:nEV], Infinite(t)  # total power of each EV, driving+V2G
         SoCevMin[n] .≤ SoCev[n ∈ 1:nEV] .≤ SoCevMax[n], Infinite(t) # State of Charge
         # Dummy variables for bidirectional flow
-        bev⁺[n ∈ 1:nEV], Infinite(t), Bin
-        bev⁻[n ∈ 1:nEV], Infinite(t), Bin
+        # bev⁺[n ∈ 1:nEV], Infinite(t), Bin
+        # bev⁻[n ∈ 1:nEV], Infinite(t), Bin
         # PevNeg[n ∈ 1:nEV] ≤ 0, Infinite(t) # Pev^- in power
-        0 ≤ PevNeg[n ∈ 1:nEV], Infinite(t)
-        0 ≤ PevPos[n ∈ 1:nEV], Infinite(t) # Pev^+ out power        
+        0 ≤ PevNeg[n ∈ 1:nEV] ≤ -PevMin[n], Infinite(t)
+        0 ≤ PevPos[n ∈ 1:nEV] ≤ PevMax[n], Infinite(t) # Pev^+ out power        
     end);
     
     # Bidirectional power flow, ensuring only export or import
@@ -1180,10 +1182,10 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
         # [n ∈ 1:nEV], PevPos[n] ≤ (1-bPev[n])*PevMax[n]
         # Alt 1: MPEC 2 Bin
         # [n ∈ 1:nEV], bev⁺[n] .+ bev⁻[n] .≤ 1
-        [n ∈ 1:nEV], PevNeg[n] .≤ - bev⁻[n] .* PevMin[n]
-        [n ∈ 1:nEV], PevPos[n] .≤ bev⁺[n] .* PevMax[n]
+        # [n ∈ 1:nEV], PevNeg[n] .≤ - bev⁻[n] .* PevMin[n]
+        # [n ∈ 1:nEV], PevPos[n] .≤ bev⁺[n] .* PevMax[n]
         # Alt 2: with ⟂
-        # [n ∈ 1:nEV], PevPos[n] ⟂ PevNeg[n]
+        [n ∈ 1:nEV], PevPos[n] ⟂ PevNeg[n]
         # Initial conditions
         [n ∈ 1:nEV], SoCev[n](t0) == SoCev0[n] 
     end);

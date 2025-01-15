@@ -182,11 +182,11 @@ function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
         SoCtess ≥ SoCtessMin, Infinite(t) # State of Charge
         # Ptess, Infinite(t) # Thermal power
         # bPtess, Infinite(t), Bin # Binary variable for TESS power
-        0 ≤ PtessPos, Infinite(t) # Ptess^+ out power
+        0 ≤ PtessPos ≤ PtessMax, Infinite(t) # Ptess^+ out power
         # PtessNeg ≤ 0, Infinite(t) # Ptess^- in power
-        btess⁺, Infinite(t), Bin # Binary variable for TESS power
-        btess⁻, Infinite(t), Bin # Binary variable for TESS power
-        0 ≤ PtessNeg, Infinite(t)
+        # btess⁺, Infinite(t), Bin # Binary variable for TESS power
+        # btess⁻, Infinite(t), Bin # Binary variable for TESS power
+        0 ≤ PtessNeg ≤ -PtessMin, Infinite(t)
     end);
     # Dummy variables for bidirectional power flow, ensuring only export or import
     # PtessNeg + PtessPos .== Ptess
@@ -197,11 +197,11 @@ function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
         # bPtess*PtessMin ≤ PtessNeg
         # PtessPos ≤ (1-bPtess)*PtessMax
         # Alt 1: MPEC 2 Bin
-        btess⁺ .+ btess⁻ .≤ 1
-        PtessNeg ≤ - btess⁻ * PtessMin
-        PtessPos ≤ btess⁺ * PtessMax
+        # btess⁺ .+ btess⁻ .≤ 1
+        # PtessNeg ≤ - btess⁻ * PtessMin
+        # PtessPos ≤ btess⁺ * PtessMax
         # Alt 2: with ⟂
-        # PtessNeg ⟂ PtessPos
+        PtessNeg ⟂ PtessPos
     end);
     
     # Initial conditions
@@ -245,10 +245,10 @@ function gridConn!(model::InfiniteModel, data::Dict) # power electronic interfac
         # Pg, Infinite(t)  # grid power
         # bPg, Infinite(t), Bin # Binary variable for Grid power
         # PgNeg ≤ 0, Infinite(t), (start=0) # Pg^- in/sell power
-        bg⁺, Infinite(t), Bin
-        bg⁻, Infinite(t), Bin
-        0 ≤ PgNeg, Infinite(t)
-        0 ≤ PgPos, Infinite(t) # Pg^+ out/buy power
+        # bg⁺, Infinite(t), Bin
+        # bg⁻, Infinite(t), Bin
+        0 ≤ PgNeg ≤ -PgMin, Infinite(t)
+        0 ≤ PgPos ≤ PgMax, Infinite(t) # Pg^+ out/buy power
     end)
     
     # Dummy variables for bidirectional power flow, ensuring only export or import
@@ -260,11 +260,11 @@ function gridConn!(model::InfiniteModel, data::Dict) # power electronic interfac
         # bPg*PgMin ≤ PgNeg
         # PgNeg * (1/ηg) + PgPos * ηg .== Pg
         # Alt 1: MPEC 2 Bin
-        bg⁺ .+ bg⁻ .≤ 1
-        PgNeg ≤ - bg⁻ * PgMin
-        PgPos ≤ bg⁺ * PgMax
+        # bg⁺ .+ bg⁻ .≤ 1
+        # PgNeg ≤ - bg⁻ * PgMin
+        # PgPos ≤ bg⁺ * PgMax
         # Alt 2: with ⟂
-        # PgNeg ⟂ PgPos
+        PgNeg ⟂ PgPos
     end)
     return model;
 end;

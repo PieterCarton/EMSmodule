@@ -15,8 +15,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
     t=model[:t];
     t0=supports(t)[1];
     # bPbess = model[:bPbess];
-    bbess⁻ = model[:bbess⁻];
-    bbess⁺ = model[:bbess⁺];
+    # bbess⁻ = model[:bbess⁻];
+    # bbess⁺ = model[:bbess⁺];
     @unpack GenInfo, PerfParameters, AgingParameters=data
     @unpack type=PerfParameters   
     @unpack_Generic GenInfo

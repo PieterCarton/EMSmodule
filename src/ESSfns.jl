@@ -328,6 +328,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
             # [n ∈ 1:nEV], iev[n] .* OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch
             [n ∈ 1:nEV], iev⁺[n] .* OCVev[n] .== 1e3*(γf .* model[:PevPos][n] .+ (1 .- γf).*Pdrive[n])./Npev[n]./Nsev[n]
             [n ∈ 1:nEV], iev⁻[n] .* OCVev[n] .== 1e3*γf.*model[:PevNeg][n]./Npev[n]./Nsev[n]
+            [n ∈ 1:nEV], iev⁻[n] ⟂ iev⁺[n]
         end);
         if sets.costWeights[3] != 0 # Aging check
             @variables(model, begin

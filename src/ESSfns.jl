@@ -308,11 +308,11 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
         @variables(model, begin
             # aOCV[n] ≤ OCVev[n ∈ 1:nEV] ≤ aOCV[n]+bOCV[n], Infinite(t),(start=OCVev0[n]) # open circuit voltage of the cell
             vmin[n] ≤ OCVev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t),(start=OCVev0[n]) # open circuit voltage of the cell
-            -imax[n] ≤ iev[n ∈ 1:nEV] ≤ imax[n], Infinite(t)  # current per branch 
-            # 0 ≤ iev⁺[n ∈ 1:nEV] ≤ imax[n], Infinite(t) # positive current per branch
-            # 0 ≤ iev⁻[n ∈ 1:nEV] ≤ imax[n], Infinite(t) # negative current per branch
+            # -imax[n] ≤ iev[n ∈ 1:nEV] ≤ imax[n], Infinite(t)  # current per branch 
+            0 ≤ iev⁺[n ∈ 1:nEV] ≤ imax[n], Infinite(t) # positive current per branch
+            0 ≤ iev⁻[n ∈ 1:nEV] ≤ imax[n], Infinite(t) # negative current per branch
         end);
-        # @expression(model, iev[n ∈ 1:nEV], iev⁺[n] - ηev[n] * iev⁻[n])
+        @expression(model, iev[n ∈ 1:nEV], iev⁺[n] - ηev[n] * iev⁻[n])
         # Initial conditions
             #=
                 @constraints(model, begin
@@ -325,9 +325,9 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
             availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
             [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
             # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
-            [n ∈ 1:nEV], iev[n] .* OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch
-            # [n ∈ 1:nEV], iev⁺[n] .* OCVev[n] .== 1e3*(γf .* model[:PevPos][n] .+ (1 .- γf).*Pdrive[n])./Npev[n]./Nsev[n]
-            # [n ∈ 1:nEV], iev⁻[n] .* OCVev[n] .== 1e3*γf.*model[:PevNeg][n]./Npev[n]./Nsev[n]
+            # [n ∈ 1:nEV], iev[n] .* OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch
+            [n ∈ 1:nEV], iev⁺[n] .* OCVev[n] .== 1e3*(γf .* model[:PevPos][n] .+ (1 .- γf).*Pdrive[n])./Npev[n]./Nsev[n]
+            [n ∈ 1:nEV], iev⁻[n] .* OCVev[n] .== 1e3*γf.*model[:PevNeg][n]./Npev[n]./Nsev[n]
         end);
         if sets.costWeights[3] != 0 # Aging check
             @variables(model, begin

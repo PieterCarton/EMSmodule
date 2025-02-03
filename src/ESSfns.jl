@@ -434,7 +434,7 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
         end);
         @expression(model, iev[n ∈ 1:nEV], iev⁺[n] - ηev[n] * iev⁻[n])
     # Initial conditions
-        @constraints(model, [n ∈ 1:nEV], iR1ev[n](t0) == iR1ev0[n]);
+        @constraint(model, [n ∈ 1:nEV], iR1ev[n](t0) == iR1ev0[n]);
     # Model constraints
         @constraints(model, begin
             availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance            

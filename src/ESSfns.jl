@@ -3,9 +3,9 @@
 # The functions include different models for battery performance and aging.
 #
 # By: Darío Slaifstein, PhD-student @TU Delft, DCES.
-# Branch: RFO_ITEC2024
+# Branch: new_mpec_1
 # Version: 1.0
-# Date: 10/09/2024
+# Date: 10/01/2025
 
 function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
 # battPerf: Battery performance modeling function
@@ -13,13 +13,15 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
 # types of battery models (Bucket, ECM or PB)
     t=model[:t];
     t0=supports(t)[1];
-    bPbess = model[:bPbess];
+    # bPbess = model[:bPbess];
+    # bbess⁻ = model[:bbess⁻];
+    # bbess⁺ = model[:bbess⁺];
     @unpack GenInfo, PerfParameters, AgingParameters=data
     @unpack type=PerfParameters   
     @unpack_Generic GenInfo
     @unpack ocvLine = OCVParam;
     Npbess = Np; Nsbess = Ns; 
-    Qbess0 = initQ*SoHQ; ηbess = η;
+    Qbess0 = initQ*SoHQ; ηbess = η; # Coulombic efficiency
     PbessMax = PowerLim[2]; # Max power [kW]
     SoCbess0 = SoC0;
     aOCV=ocvLine[1]; bOCV=ocvLine[2];
@@ -33,8 +35,11 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
         @variables(model, begin
             # aOCV ≤ OCVbess ≤ aOCV+bOCV, Infinite(t), (start=OCVbess0) # open circuit voltage of the cell
             vmin ≤ OCVbess ≤ vmax, Infinite(t), (start=OCVbess0) # open circuit voltage of the cell
-            -imax ≤ ibess ≤ imax, Infinite(t), (start=0) # current per branch
-        end); 
+            # -imax ≤ ibess ≤ imax, Infinite(t), (start=0) # current per branch
+            0 ≤ ibess⁺ ≤ imax, Infinite(t), (start=0)
+            0 ≤ ibess⁻ ≤ imax, Infinite(t), (start=0)
+        end);
+        @expression(model, ibess, ibess⁺ - ηbess * ibess⁻)
     
     # Initial conditions
         #=
@@ -47,7 +52,9 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
         @constraints(model, begin
             OCVbess == aOCV+bOCV*model[:SoCbess] # Linear voltage model
             # OCVbess == OCVfromSOCtemp(SoCbess, T, data["BESS"]) # Lookup table voltage model
-            ibess * OCVbess == 1e3*model[:Pbess]/Npbess/Nsbess # current per branch. 1e3 to convert kW->W
+            # ibess * OCVbess == 1e3*model[:Pbess]/Npbess/Nsbess # current per branch. 1e3 to convert kW->W
+            ibess⁺ * OCVbess == 1e3*model[:PbessPos]/Npbess/Nsbess
+            ibess⁻ * OCVbess == 1e3*model[:PbessNeg]/Npbess/Nsbess
         end);
         
         if sets.costWeights[3] != 0 # Aging check
@@ -56,11 +63,24 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
                 0.8*Qbess0 ≤ Qbess ≤ Qbess0, Infinite(t), (start=Qbess0) # cell capacity
             end);
             @constraints(model, begin
+<<<<<<< HEAD
                 ∂.(model[:SoCbess], t) .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 # Aging Qbess
                 Qbess(t0) .== Qbess0;
             end);
         else
             @constraint(model, ∂.(model[:SoCbess], t) .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess0/3600) # Static Qbess
+=======
+                # ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 * 1e3 # Aging Qbess
+                # ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess0/3600 * 1e3 # No-Aging Qbess
+                # ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bbess⁻ + bbess⁺)*ibess/Qbess0/3600 * 1e3
+                ∂.(model[:SoCbess], t) * 1e3 .== -ibess/Qbess0/3600 * 1e3
+                Qbess(t0) .== Qbess0;
+            end);
+        else
+            # @constraint(model, ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess0/3600 * 1e3) # Static Qbess
+            # @constraint(model, ∂.(model[:SoCbess], t) * 1e3 .== -(ηbess * bbess⁻ + bbess⁺)*ibess/Qbess0/3600 * 1e3) # Static Qbess
+            @constraint(model, ∂.(model[:SoCbess], t) * 1e3 .== -ibess/Qbess0/3600 * 1e3)
+>>>>>>> new_mpec_1
         end
     elseif type == "ECM"
     # Model variables
@@ -78,12 +98,14 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
             # aOCV ≤ vtbess ≤ aOCV+bOCV, Infinite(t),(start=OCVbess0)  # terminal voltage of the cell
             vmin ≤ OCVbess ≤ vmax, Infinite(t),(start=OCVbess0) # open circuit voltage of the cell
             vmin ≤ vtbess ≤ vmax, Infinite(t),(start=OCVbess0)  # terminal voltage of the cell
-            -imax ≤ ibess ≤ imax, Infinite(t), (start=0.0) # total current per branch
+            # -imax ≤ ibess ≤ imax, Infinite(t), (start=0.0) # total current per branch
+            0 ≤ ibess⁺ ≤ imax, Infinite(t), (start=0)
+            0 ≤ ibess⁻ ≤ imax, Infinite(t), (start=0)
             -imax ≤ iR1bess ≤ imax, Infinite(t), (start=0.0) # pole current
             -imax ≤ ilossbess ≤ imax, Infinite(t), (start=0.0) # total aging
             0.8*Qbess0 ≤ Qbess ≤ Qbess0, Infinite(t), (start=Qbess0) # cell capacity
         end);
-
+        @expression(model, ibess, ibess⁺ - ηbess * ibess⁻)
     # Initial conditions
         @constraints(model, begin
             # OCVbess(t0) == OCVbess0;
@@ -95,10 +117,20 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
 
     # Model constraints
         @constraints(model, begin
-            ibess * vtbess == 1e3*model[:Pbess]/Npbess/Nsbess # current per branch. 1e3 to convert kW->W
+            # ibess * vtbess == 1e3*model[:Pbess]/Npbess/Nsbess # current per branch. 1e3 to convert kW->W
+            ibess⁺ * vtbess == 1e3*model[:PbessPos]/Npbess/Nsbess
+            ibess⁻ * vtbess == 1e3*model[:PbessNeg]/Npbess/Nsbess
             # Transition function
+<<<<<<< HEAD
             ∂.(model[:SoCbess], t) .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 # Aging Qbess
             ∂.(iR1bess, t) .== (-1 ./taubess*iR1bess+1 ./taubess*ibess) # RC resistor currents
+=======
+            # ∂.(model[:SoCbess], t)* 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 * 1e3 # Aging Qbess
+            # ∂.(model[:SoCbess], t)* 1e3 .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess0/3600 * 1e3 # No-Aging Qbess
+            # ∂.(model[:SoCbess], t)* 1e3 .== -(ηbess * bbess⁻ + bbess⁺)*ibess/Qbess0/3600 * 1e3 # Aging Qbess
+            ∂.(model[:SoCbess], t)* 1e3 .== -ibess/Qbess0/3600 * 1e3 
+            ∂.(iR1bess, t) * 1e3 .== (-1 ./taubess*iR1bess+1 ./taubess*ibess) * 1e3 # RC resistor currents
+>>>>>>> new_mpec_1
             #Hysterisis?
             # Output equations
             # OCVbess == OCVfromSOCtemp(SoCbess, T, data["BESS"]) # Lookup table voltage model
@@ -191,8 +223,8 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
             # CHECK
             ibess == 1e3*model[:Pbess]/Npbess/Nsbess/vtbess # current per branch. 1e3 to convert kW->W
             # Transition function
-            # ∂.(model[:SoCbess], t) .== -ηbess*ibess/Qbess/3600 # Aging Qbess
-            ∂.(model[:SoCbess], t) .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 # Aging Qbess
+            # ∂.(model[:SoCbess], t) .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess/3600 # Aging Qbess
+            ∂.(model[:SoCbess], t) .== -(ηbess * bPbess + (1-bPbess))*ibess/Qbess0/3600 # Aging Qbess
             ∂.(xbess[o ∈ nO], t) .== A*xbess[o ∈ nO]+B*ibess # ROM state transition
             # Output equations
             ybess .== C*xbess[o ∈ nO] + D*ibess
@@ -208,7 +240,6 @@ end
 function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
 # battPerf: Battery performance modeling function
     t=model[:t]; # continuous time
-    
     Dt=sets.dTime; # discrete time
     t0=supports(t)[1]; tend=supports(t)[end];
     Δt=supports(t)[2]-supports(t)[1];
@@ -217,7 +248,9 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
     it0 = round(Int,(t0/Δt));
     itend = it0+length(Dt)-1;
     day = ceil(Int, it0/(24*3600/Δt));
-    bPev = model[:bPev];
+    # bPev = model[:bPev];
+    # bev⁻ = model[:bev⁻];
+    # bev⁺ = model[:bev⁺];
 
     @unpack GenInfo, PerfParameters, AgingParameters=data.carBatteryPack
     @unpack_Generic GenInfo
@@ -287,8 +320,11 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
         @variables(model, begin
             # aOCV[n] ≤ OCVev[n ∈ 1:nEV] ≤ aOCV[n]+bOCV[n], Infinite(t),(start=OCVev0[n]) # open circuit voltage of the cell
             vmin[n] ≤ OCVev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t),(start=OCVev0[n]) # open circuit voltage of the cell
-            -imax[n] ≤ iev[n ∈ 1:nEV] ≤ imax[n], Infinite(t)  # current per branch 
+            # -imax[n] ≤ iev[n ∈ 1:nEV] ≤ imax[n], Infinite(t)  # current per branch 
+            0 ≤ iev⁺[n ∈ 1:nEV] ≤ imax[n], Infinite(t) # positive current per branch
+            0 ≤ iev⁻[n ∈ 1:nEV] ≤ imax[n], Infinite(t) # negative current per branch
         end);
+        @expression(model, iev[n ∈ 1:nEV], iev⁺[n] - ηev[n] * iev⁻[n])
         # Initial conditions
             #=
                 @constraints(model, begin
@@ -301,9 +337,12 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
             availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
             [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
             # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
-            [n ∈ 1:nEV], iev[n] * OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch     
+            # [n ∈ 1:nEV], iev[n] .* OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch
+            [n ∈ 1:nEV], iev⁺[n] .* OCVev[n] .== 1e3*(γf .* model[:PevPos][n] .+ (1 .- γf).*Pdrive[n])./Npev[n]./Nsev[n]
+            [n ∈ 1:nEV], iev⁻[n] .* OCVev[n] .== 1e3*γf.*model[:PevNeg][n]./Npev[n]./Nsev[n]
         end);
         if sets.costWeights[3] != 0 # Aging check
+<<<<<<< HEAD
                 @variables(model, begin
                     -imax[n] ≤ ilossev[n ∈ 1:nEV] ≤ imax[n], Infinite(t) # total aging
                     0.8*Qev0[n] .≤ Qev[n ∈ 1:nEV] .≤ Qev0[n], Infinite(t) # cell capacity
@@ -316,6 +355,27 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
                 # Static Qbess
                 @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600) 
             end
+=======
+            @variables(model, begin
+                -imax[n] ≤ ilossev[n ∈ 1:nEV] ≤ imax[n], Infinite(t) # total aging
+                0.8*Qev0[n] .≤ Qev[n ∈ 1:nEV] .≤ Qev0[n], Infinite(t) # cell capacity
+            end);
+            @constraints(model, begin
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3 # No-Aging Qev
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bev⁻[n] + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * (bev⁻[n] + (1 .- γf)) + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
+                [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -iev[n]/Qev0[n]/3600 * 1e3
+                [n ∈ 1:nEV], Qev[n](t0) .== Qev0;
+            end);
+        else
+            # Static Qbess
+            # @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3)
+            # @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bev⁻[n] + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3)
+            # @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * (bev⁻[n] + (1 .- γf)) + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3)
+            @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -iev[n]/Qev0[n]/3600 * 1e3)
+        end
+>>>>>>> new_mpec_1
     elseif type == "ECM"
         # Model variables
             @unpack R0Param, RParam, RCParam, iRn0, vt0 = performanceParams
@@ -329,12 +389,15 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
                 # aOCV[n] ≤ vtev[n ∈ 1:nEV] ≤ aOCV[n]+bOCV[n], Infinite(t), (start=OCVev0[n]) # terminal voltage of the cell
                 vmin[n] ≤ OCVev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t), (start=OCVev0[n]) # open circuit voltage of the cell
                 vmin[n] ≤ vtev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t), (start=OCVev0[n]) # terminal voltage of the cell
-                -imax[n] ≤ iev[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # total current per branch
+                # -imax[n] ≤ iev[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # total current per branch
+                0 ≤ iev⁺[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0)
+                0 ≤ iev⁻[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0)
                 -imax[n] ≤ ilossev[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # total aging
                 -imax[n] ≤ iR1ev[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # pole current
                 0.8*Qev0[n] .≤ Qev[n ∈ 1:nEV] .≤ Qev0[n], Infinite(t), (start=Qev0[n]) # cell capacity
                 # R0ev0[n] .≤ R0ev[n ∈ 1:nEV] .≤ R0ev0[n]*1.2, Infinite(t), (start=R0ev0[n]) # cell capacity
             end);
+            @expression(model, iev[n ∈ 1:nEV], iev⁺[n] - ηev[n] * iev⁻[n])
         # Initial conditions
             @constraints(model, begin
                 # [n ∈ 1:nEV], OCVev[n](t0) == OCVev0[n];
@@ -346,10 +409,20 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::EVData)
         # Model constraints
             @constraints(model, begin
                 availability[n ∈ 1:nEV], model[:γf].*model[:Pev][n] + (1-model[:γf]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
-                [n ∈ 1:nEV], iev[n] * vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
+                # [n ∈ 1:nEV], iev[n] * vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
+                [n ∈ 1:nEV], iev⁺[n] .* OCVev[n] .== 1e3*(γf .* model[:PevPos][n] .+ (1 .- γf).*Pdrive[n])./Npev[n]./Nsev[n]
+                [n ∈ 1:nEV], iev⁻[n] .* OCVev[n] .== 1e3*γf.*model[:PevNeg][n]./Npev[n]./Nsev[n]
                 # Transition function
+<<<<<<< HEAD
                 [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 # Aging Qev
                 [n ∈ 1:nEV], ∂.(iR1ev[n], t) .== (-1/tauev[n]*iR1ev[n]+1/tauev[n]*iev[n]) # RC resistor currents
+=======
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3 # No-Aging Qev
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bev⁻[n] + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
+                [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -iev[n]/Qev0[n]/3600 * 1e3
+                [n ∈ 1:nEV], ∂.(iR1ev[n], t) * 1e3 .== (-1/tauev[n]*iR1ev[n]+1/tauev[n]*iev[n]) * 1e3 # RC resistor currents
+>>>>>>> new_mpec_1
                 #Hysterisis?
                 # Output equations
                 #[n ∈ 1:nEV], OCVev[n] == OCVfromSOCtemp(SoCev, T, data["EV"]) # Lookup table voltage model
@@ -376,7 +449,9 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     itend = it0+length(Dt)-1;
     # calculate in which day is it0
     day = ceil(Int, it0/(24*3600/Δt));
-    bPev = model[:bPev];
+    # bPev = model[:bPev];
+    # bev⁻ = model[:bev⁻];
+    # bev⁺ = model[:bev⁺];
 
     Npev = zeros(nEV,1); Nsev = zeros(nEV,1);
     ηev = zeros(nEV,1); Qev0 = zeros(nEV,1);
@@ -471,28 +546,46 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
         @variables(model, begin
             # aOCV[n] ≤ OCVev[n ∈ 1:nEV] ≤ aOCV[n]+bOCV[n], Infinite(t),(start=OCVev0[n]) # open circuit voltage of the cell
             vmin[n] ≤ OCVev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t),(start=OCVev0[n]) # open circuit voltage of the cell
-            -imax[n] ≤ iev[n ∈ 1:nEV] ≤ imax[n], Infinite(t)  # current per branch 
+            # -imax[n] ≤ iev[n ∈ 1:nEV] ≤ imax[n], Infinite(t)  # current per branch
+            0 ≤ iev⁺[n ∈ 1:nEV] ≤ imax[n], Infinite(t)
+            0 ≤ iev⁻[n ∈ 1:nEV] ≤ imax[n], Infinite(t)
         end);
+        @expression(model, iev[n ∈ 1:nEV], iev⁺[n] - ηev[n] * iev⁻[n])
     # Initial conditions   
     # Model constraints
        @constraints(model, begin
-           availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
-           [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
-           # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
-           [n ∈ 1:nEV], iev[n] .* OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch     
+            availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
+            [n ∈ 1:nEV], OCVev[n] .== aOCV[n]+bOCV[n]*model[:SoCev][n] # linear voltage model
+            # [n ∈ 1:nEV], OCVev[n] == OCVfromSoC(SoCev[n]) # Lookup table voltage model
+            # [n ∈ 1:nEV], iev[n] .* OCVev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch
+            [n ∈ 1:nEV], iev⁺[n] .* OCVev[n] .== 1e3*(γf[n] .* model[:PevPos][n] .+ (1 .- γf[n]).*Pdrive[n])./Npev[n]./Nsev[n]
+            [n ∈ 1:nEV], iev⁻[n] .* OCVev[n] .== 1e3*γf[n].*model[:PevNeg][n]./Npev[n]./Nsev[n]
        end);
-    if sets.costWeights[3] != 0 # Aging check
+        if sets.costWeights[3] != 0 # Aging check
             @variables(model, begin
                 -imax[n] ≤ ilossev[n ∈ 1:nEV] ≤ imax[n], Infinite(t) # total aging
                 0.8*Qev0[n] .≤ Qev[n ∈ 1:nEV] .≤ Qev0[n], Infinite(t) # cell capacity
             end);
             @constraints(model, begin
+<<<<<<< HEAD
                 [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 # Aging Qev
+=======
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3 # No-Aging Qev
+                # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bev⁻[n] + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
+                [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -iev[n]/Qev0[n]/3600 * 1e3
+>>>>>>> new_mpec_1
                 [n ∈ 1:nEV], Qev[n](t0) .== Qev0;
             end);
         else
             # Static Qbess
+<<<<<<< HEAD
             @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600) 
+=======
+            # @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3)
+            # @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bev⁻[n] + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3)
+            @constraint(model, [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -iev[n]/Qev0[n]/3600 * 1e3)
+>>>>>>> new_mpec_1
         end
     elseif type == "ECM"
     # Model variables
@@ -511,12 +604,15 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
             # aOCV[n] ≤ vtev[n ∈ 1:nEV] ≤ aOCV[n]+bOCV[n], Infinite(t), (start=OCVev0[n]) # terminal voltage of the cell
             vmin[n] ≤ OCVev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t), (start=OCVev0[n]) # open circuit voltage of the cell
             vmin[n] ≤ vtev[n ∈ 1:nEV] ≤ vmax[n], Infinite(t), (start=OCVev0[n]) # terminal voltage of the cell
-            -imax[n] ≤ iev[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # total current per branch
+            # -imax[n] ≤ iev[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # total current per branch
+            0 ≤ iev⁺[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0)
+            0 ≤ iev⁻[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0)
             -imax[n] ≤ ilossev[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # total aging
             -imax[n] ≤ iR1ev[n ∈ 1:nEV] ≤ imax[n], Infinite(t), (start=0.0) # pole current
             0.8*Qev0[n] .≤ Qev[n ∈ 1:nEV] .≤ Qev0[n], Infinite(t), (start=Qev0[n]) # cell capacity
             # R0ev0[n] .≤ R0ev[n ∈ 1:nEV] .≤ R0ev0[n]*1.2, Infinite(t), (start=R0ev0[n]) # cell capacity
         end);
+        @expression(model, iev[n ∈ 1:nEV], iev⁺[n] - ηev[n] * iev⁻[n])
     # Initial conditions
         @constraints(model, begin
             [n ∈ 1:nEV], iR1ev[n](t0) == iR1ev0[n];
@@ -524,10 +620,20 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::Vector{EV
     # Model constraints
         @constraints(model, begin
             availability[n ∈ 1:nEV], model[:γf][n].*model[:Pev][n] + (1-model[:γf][n]).*Pdrive[n] - model[:PevTot][n] .== 0 # power balance
-            [n ∈ 1:nEV], iev[n] .* vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
+            # [n ∈ 1:nEV], iev[n] .* vtev[n] .== 1e3*model[:PevTot][n]/Npev[n]/Nsev[n] # current per branch. 1e3 to convert kW->W
+            [n ∈ 1:nEV], iev⁺[n] .* OCVev[n] .== 1e3*(γf[n] .* model[:PevPos][n] .+ (1 .- γf[n]).*Pdrive[n])./Npev[n]./Nsev[n]
+            [n ∈ 1:nEV], iev⁻[n] .* OCVev[n] .== 1e3*γf[n].*model[:PevNeg][n]./Npev[n]./Nsev[n]
             # Transition function
+<<<<<<< HEAD
             [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 # Aging Qev
             [n ∈ 1:nEV], ∂.(iR1ev[n], t) .== (-1/tauev[n]*iR1ev[n]+1/tauev[n]*iev[n]) # RC resistor currents
+=======
+            # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev[n]/3600 * 1e3 # Aging Qev
+            # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bPev[n] + (1-bPev[n]))*iev[n]/Qev0[n]/3600 * 1e3 # No-Aging Qev
+            # [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -(ηev[n] * bev⁻[n] + bev⁺[n])*iev[n]/Qev0[n]/3600 * 1e3
+            [n ∈ 1:nEV], ∂.(model[:SoCev][n], t) * 1e3 .== -iev[n]/Qev0[n]/3600 * 1e3
+            [n ∈ 1:nEV], ∂.(iR1ev[n], t) * 1e3 .== (-1/tauev[n]*iR1ev[n]+1/tauev[n]*iev[n]) * 1e3 # RC resistor currents
+>>>>>>> new_mpec_1
             #Hysterisis?
             # Output equations
             #[n ∈ 1:nEV], OCVev[n] == OCVfromSOCtemp(SoCev, T, data["EV"]) # Lookup table voltage model
@@ -566,6 +672,9 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
     Qbess=model[:Qbess];
     SoCbess=model[:SoCbess];
     ibess=model[:ibess];
+    # bPbess=model[:bPbess];
+    ibess⁺=model[:ibess⁺];
+    ibess⁻=model[:ibess⁻];
 
     R = 8.314 # Gas constant [J/K/mol]
     T = 25+273 # pack temperature [K]
@@ -578,8 +687,8 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
     if type == "empirical"
     # Empirical from Wang et al (2014)
         @unpack c, initT = AgingParameters
-
-        ilossCyclebess = c[1]*c[3]/c[4]*ℯ^(c[2]*abs(ibess))*(1-SoCbess)*abs(ibess); # cyclic aging
+        # ilossCyclebess = c[1]*c[3]/c[4]*ℯ^(c[2]*abs(ibess))*(1-SoCbess)*abs(ibess); # cyclic aging
+        ilossCyclebess = c[1]*c[3]/c[4]*ℯ^(c[2]*(ibess⁺+ibess⁻))*(1-SoCbess)*(ibess⁺+ibess⁻);
         ilossCalbess = c[5]*√(initT + t)* ℯ^(-24e3/R/T); # calendar aging
         @constraints(model, begin
             ilossbess .== ilossCyclebess + ilossCalbess # total aging
@@ -589,7 +698,6 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
     elseif type == "PB Jin"
     # Physics-based from Jin (2022)
     # Most equations and values come from Jin (2022), a small piece comes from Jin (2017) the original modeling paper.
-        bPbess=model[:bPbess];
         @unpack_JinAgingParams AgingParameters
         Tref=T; # Reference temperature 
     # SEI layer.
@@ -632,8 +740,13 @@ function add_battDeg(model::InfiniteModel, data::BESSData)
         # Parameter list
         # kAM = kAM⁰/εAM⁰, [1/Ah]
         # EAM: activation energy [J/mol]
+<<<<<<< HEAD
         # iAM = kAM*ℯ^(-EAM/R/T)*SoCbess*(-ibess*bPbess + ibess*(1 - bPbess))*Qbess0*3600;
         iAM = kAM*ℯ^(-EAM/R/T)*(SoCbess*100)*(-ibess*bPbess + ibess*(1 - bPbess))*Qbess0;
+=======
+        # iAM = kAM*ℯ^(-EAM/R/T)*(SoCbess*100)*(-ibess*bPbess + ibess*(1 - bPbess))*Qbess0;
+        iAM = kAM*ℯ^(-EAM/R/T)*(SoCbess*100)*(ibess⁺+ibess⁻)*Qbess0;
+>>>>>>> new_mpec_1
 
     # Lithium Plating
         # Parameter list:
@@ -717,6 +830,8 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData)
     t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
     ilossev=model[:ilossev]; Qev=model[:Qev];
     SoCev=model[:SoCev]; iev=model[:iev]
+    # bPev=model[:bPev];
+    iev⁻=model[:iev⁻]; iev⁺=model[:iev⁺];
     R = 8.314 # Gas constant [J/K/mol]
     T = 25+273 # pack temperature [K]
     F = 96485.0 # Faraday constant [C/mol]
@@ -731,9 +846,10 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData)
     if type == "empirical"
     # Empirical from Wang et al (2014)
         @unpack c, initT = agingParams # should change in the future.
-
         # Empirical from Wang et al (2014) doi: 10.1016/j.jpowsour.2014.07.030
-        ilossCycleev = [c[1]*c[3]/c[4]*ℯ^(c[2]*abs(model[:iev][n]))*(1-model[:SoCev][n])*abs(model[:iev][n]) for n in 1:nEV]; # cyclic aging
+        # ilossCycleev = [c[1]*c[3]/c[4]*ℯ^(c[2]*abs(iev[n]))*(1-SoCev[n])*abs(iev[n]) for n in 1:nEV]; # cyclic aging
+        # ilossCycleev = [c[1]*c[3]/c[4]*ℯ^(c[2]*((bev⁺[n]-bev⁻[n])*iev[n]))*(1-SoCev[n])*((bev⁺[n]-bev⁻[n])*iev[n]) for n in 1:nEV];
+        ilossCycleev = [c[1]*c[3]/c[4]*ℯ^(c[2]*(iev⁺[n]+iev⁻[n]))*(1-SoCev[n])*(iev⁺[n]+iev⁻[n]) for n in 1:nEV];
         ilossCalev = c[5]*√(initT+t)* ℯ^(-24e3/R/T); # calendar aging
         @constraints(model, begin
             [n ∈ 1:nEV], ilossev[n] .== ilossCycleev[n] + ilossCalev # total aging
@@ -743,7 +859,6 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData)
     elseif type == "PB Jin"
     # Physics-based from Jin (2022)
     # Most equations and values come from Jin (2022), a small piece comes from Jin (2017) the original modeling paper.
-        bPev=model[:bPev]; 
         # R0ev=model[:R0ev];
         @unpack_JinAgingParams agingParams # should change in the future.
         Tref=T; # Reference temperature [K]
@@ -775,8 +890,14 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData)
         # Parameter list
         # kAM = kAM⁰/εAM⁰, [1/Ah]
         # EAM: activation energy [J/mol]
+<<<<<<< HEAD
         # iAM =[kAM*ℯ^(-EAM/R/T)*SoCev[n]*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n]*3600 for n in 1:nEV];
         iAM =[kAM*ℯ^(-EAM/R/T)*(SoCev[n]*100)*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n] for n in 1:nEV];
+=======
+        # iAM =[kAM*ℯ^(-EAM/R/T)*(SoCev[n]*100)*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n] for n in 1:nEV];
+        # iAM =[kAM*ℯ^(-EAM/R/T)*(SoCev[n]*100)*(bev⁺[n]-bev⁻[n])*iev[n]*Qev0[n] for n in 1:nEV];
+        iAM =[kAM*ℯ^(-EAM/R/T)*(SoCev[n]*100)*(iev⁺[n]+iev⁻[n])*Qev0[n] for n in 1:nEV];
+>>>>>>> new_mpec_1
 
     # Lithium Plating
         # Parameter list:
@@ -861,6 +982,8 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::Vector{EVD
     t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
     ilossev=model[:ilossev]; Qev=model[:Qev];
     SoCev=model[:SoCev]; iev=model[:iev]
+    # bPev=model[:bPev];
+    iev⁻=model[:iev⁻]; iev⁺=model[:iev⁺];
     R = 8.314 # Gas constant [J/K/mol]
     T = 25+273 # pack temperature [K]
     F = 96485.0 # Faraday constant [C/mol]
@@ -885,7 +1008,8 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::Vector{EVD
             # Empirical from Wang et al (2014) doi: 10.1016/j.jpowsour.2014.07.030
             push!(cev, c); initTev[n] = initT;
         end
-        ilossCycleev = [cev[n][1]*cev[n][3]/cev[n][4]*ℯ^(cev[n][2]*abs(model[:iev][n]))*(1-model[:SoCev][n])*abs(model[:iev][n]) for n ∈ 1:nEV]; # cyclic aging
+        # ilossCycleev = [cev[n][1]*cev[n][3]/cev[n][4]*ℯ^(cev[n][2]*abs(model[:iev][n]))*(1-model[:SoCev][n])*abs(model[:iev][n]) for n ∈ 1:nEV]; # cyclic aging
+        ilossCycleev = [cev[n][1]*cev[n][3]/cev[n][4]*ℯ^(cev[n][2]*(iev⁺[n]+iev⁻[n]))*(1-SoCev[n])*(iev⁺[n]+iev⁻[n]) for n ∈ 1:nEV];
         ilossCalev = [cev[n][5]*√(initTev[n]+t)* ℯ^(-24e3/R/T) for n ∈ 1:nEV]; # calendar aging
         @constraints(model, begin
             [n ∈ 1:nEV], ilossev[n] .== ilossCycleev[n] + ilossCalev[n] # total aging
@@ -895,7 +1019,7 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::Vector{EVD
     elseif type == "PB Jin"
     # Physics-based from Jin (2022)
     # Most equations and values come from Jin (2022), a small piece comes from Jin (2017) the original modeling paper.
-        bPev=model[:bPev]; # R0ev=model[:R0ev];
+        # R0ev=model[:R0ev];
         initTev = zeros(nEV);
         z100pev = zeros(nEV); z0pev = zeros(nEV)
         nSEIev = zeros(nEV); λev = zeros(nEV)
@@ -945,8 +1069,14 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::Vector{EVD
         # Parameter list
         # kAM = kAM⁰/εAM⁰, [1/Ah]
         # EAM: activation energy [J/mol]
+<<<<<<< HEAD
         # iAM =[kAM*ℯ^(-EAM/R/T)*SoCev[n]*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n]*3600 for n in 1:nEV];
         iAM =[kAMev[n]*ℯ^(-EAMev[n]/R/T)*(SoCev[n]*100)*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n] for n in 1:nEV];
+=======
+        # iAM =[kAMev[n]*ℯ^(-EAMev[n]/R/T)*(SoCev[n]*100)*(- iev[n]*bPev[n] + iev[n]*(1 .-bPev[n]))*Qev0[n] for n in 1:nEV];
+        # iAM =[kAMev[n]*ℯ^(-EAMev[n]/R/T)*(SoCev[n]*100)*(bev⁺[n]-bev⁻[n])*iev[n]*Qev0[n] for n in 1:nEV];
+        iAM =[kAMev[n]*ℯ^(-EAMev[n]/R/T)*(SoCev[n]*100)*(iev⁺[n]+iev⁻[n])*Qev0[n] for n in 1:nEV];
+>>>>>>> new_mpec_1
 
     # Lithium Plating
         # Parameter list:
@@ -1044,20 +1174,30 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
     
     # Add variables
     @variables(model, begin
-        Pbess, Infinite(t) # output power
-        bPbess, Infinite(t), Bin # Binary variable for output power
-        SoCbessMin ≤ SoCbess ≤ SoCbessMax, Infinite(t) # State of Charge
-        # Dummy variables for bidirectional flow
-        0 ≤ PbessPos, Infinite(t) # Pbess^+ out power
-        PbessNeg ≤ 0, Infinite(t) # Pbess^- in power
-    end);
+        SoCbessMin ≤ SoCbess ≤ SoCbessMax, Infinite(t) # State of Charge    
+        # Pbess, Infinite(t) # output power
+        # bPbess, Infinite(t), Bin # Binary variable for output power    
+        # PbessNeg ≤ 0, Infinite(t) # Pbess^- in power
+        # bbess⁺, Infinite(t), Bin
+        # bbess⁻, Infinite(t), Bin
+        0 ≤ PbessPos ≤ PbessMax, Infinite(t) # Pbess^+ out power
+        0 ≤ PbessNeg ≤ -PbessMin, Infinite(t)
+    end)
     
     # Bidirectional power flow, ensuring only export or import
+    # PbessNeg + PbessPos .== Pbess
+    @expression(model, Pbess, PbessPos * ηbess .- PbessNeg * (1/ηbess))
     @constraints(model, begin
-        # PbessNeg + PbessPos == Pbess
-        PbessNeg * (1/ηbess) + PbessPos * ηbess .== Pbess
-        bPbess*PbessMin ≤ PbessNeg
-        PbessPos ≤ (1-bPbess)*PbessMax
+        # Base MPEC 1 Bin
+        # PbessNeg * (1/ηbess) + PbessPos * ηbess .== Pbess
+        # bPbess*PbessMin ≤ PbessNeg
+        # PbessPos ≤ (1-bPbess)*PbessMax
+        # Alt 1: MPEC 2 Bin
+        # bbess⁺ + bbess⁻ .≤ 1
+        # PbessNeg ≤ - bbess⁻ * PbessMin
+        # PbessPos ≤ bbess⁺ * PbessMax
+        # Alt 2: with ⟂
+        PbessPos ⟂ PbessNeg
         # Initial conditions
         SoCbess(t0) ==  SoCbess0
     end);
@@ -1107,21 +1247,32 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
     # Add variables
     # Pev > 0 -> out power and Pev < 0 -> in power
     @variables(model, begin
-        Pev[n ∈ 1:nEV], Infinite(t)  # EV charger power 
-        bPev[n ∈ 1:nEV], Infinite(t), Bin  # EV charger power 
+        # Pev[n ∈ 1:nEV], Infinite(t)  # EV charger power 
+        # bPev[n ∈ 1:nEV], Infinite(t), Bin  # EV charger power
         PevTot[n ∈ 1:nEV], Infinite(t)  # total power of each EV, driving+V2G
         SoCevMin[n] .≤ SoCev[n ∈ 1:nEV] .≤ SoCevMax[n], Infinite(t) # State of Charge
         # Dummy variables for bidirectional flow
-        0 ≤ PevPos[n ∈ 1:nEV], Infinite(t) # Pev^+ out power   
-        PevNeg[n ∈ 1:nEV] ≤ 0, Infinite(t) # Pev^- in power
+        # bev⁺[n ∈ 1:nEV], Infinite(t), Bin
+        # bev⁻[n ∈ 1:nEV], Infinite(t), Bin
+        # PevNeg[n ∈ 1:nEV] ≤ 0, Infinite(t) # Pev^- in power
+        0 ≤ PevNeg[n ∈ 1:nEV] ≤ -PevMin[n], Infinite(t)
+        0 ≤ PevPos[n ∈ 1:nEV] ≤ PevMax[n], Infinite(t) # Pev^+ out power        
     end);
     
     # Bidirectional power flow, ensuring only export or import
+    # [n ∈ 1:nEV], PevNeg[n] + PevPos[n] == Pev[n]
+    @expression(model, Pev[n ∈ 1:nEV], PevPos[n] * ηev[n] .- PevNeg[n] * (1/ηev[n]))
     @constraints(model, begin
-        # [n ∈ 1:nEV], PevNeg[n] + PevPos[n] == Pev[n]
-        [n ∈ 1:nEV], PevNeg[n] * (1/ηev[n]) + PevPos[n] * ηev[n] == Pev[n]
-        [n ∈ 1:nEV], bPev[n]*PevMin[n] ≤ PevNeg[n]
-        [n ∈ 1:nEV], PevPos[n] ≤ (1-bPev[n])*PevMax[n]
+        # Base MPEC 1 Bin
+        # [n ∈ 1:nEV], PevPos[n] * ηev[n] .- PevNeg[n] * (1/ηev[n]) .== Pev[n]
+        # [n ∈ 1:nEV], bPev[n]*PevMin[n] ≤ PevNeg[n]
+        # [n ∈ 1:nEV], PevPos[n] ≤ (1-bPev[n])*PevMax[n]
+        # Alt 1: MPEC 2 Bin
+        # [n ∈ 1:nEV], bev⁺[n] .+ bev⁻[n] .≤ 1
+        # [n ∈ 1:nEV], PevNeg[n] .≤ - bev⁻[n] .* PevMin[n]
+        # [n ∈ 1:nEV], PevPos[n] .≤ bev⁺[n] .* PevMax[n]
+        # Alt 2: with ⟂
+        [n ∈ 1:nEV], PevPos[n] ⟂ PevNeg[n]
         # Initial conditions
         [n ∈ 1:nEV], SoCev[n](t0) == SoCev0[n] 
     end);

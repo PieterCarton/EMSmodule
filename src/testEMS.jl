@@ -268,8 +268,8 @@ function calcFullObj(result, data, s)
     else
         Qlossev=result[:"Qev[1]"][1].-result[:"Qev[1]"];
         Qloss = data["BESS"].GenInfo.Ns * data["BESS"].GenInfo.Np * Qlossbess .+
-                data["EV"][n].carBatteryPack.GenInfo.Ns *
-                data["EV"][n].carBatteryPack.GenInfo.Np * Qlossev;
+                data["EV"][1].carBatteryPack.GenInfo.Ns *
+                data["EV"][1].carBatteryPack.GenInfo.Np * Qlossev;
     end    
     closs = 1.2; # [€/Ah]
     Closs = closs .* Qloss; # [€]

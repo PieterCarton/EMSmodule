@@ -55,7 +55,7 @@ function processPrices(df;
     # - "summary". Summary data coming from "makePriceForecast.ipynb" dashboard.
     # The price data is in [€/MWh]
     @assert type ∈ ["raw", "summary"] "Invalid type of data"
-    @assert profType ∈ ["daily", "weekly", "biweekly","yearly"] "Invalid profile type"
+    @assert profType ∈ ["daily", "weekly", "biweekly","monthly","yearly"] "Invalid profile type"
     profType == "yearly" ? nothing : @assert season ∈ ["summer", "winter"] "Invalid season";
     
     if type=="raw"        
@@ -107,11 +107,12 @@ function getSeasonalProfiles(data::Vector;
     type::String="daily", # type of profile to return
     )
     # check the type of profile
-    @assert type ∈ ["biweekly", "weekly", "daily"] "Invalid profile type"    
+    @assert type ∈ ["monthly", "biweekly", "weekly", "daily"] "Invalid profile type"    
 
     type == "daily" ? n_days=1 : nothing;
     type == "weekly" ? n_days=7 : nothing;
     type == "biweekly" ? n_days=7 : nothing;
+    type == "monthly" ? n_days=30 : nothing;
     # Get seasonal profiles for each device
     start_date = DateTime("2023-01-01T00:00:00")
     end_date = DateTime("2023-12-31T24:00:00")
@@ -136,7 +137,11 @@ function getSeasonalProfiles(data::Vector;
         prof_df=Vector();
         for nd ∈ 1:n_days
             # take the data for a season and the nd-th day of the week
-            red_df = data_df[(getSeason.(month.(data_df.date)) .== season) .& (Dates.dayofweek.(data_df.date) .== nd), :]
+            if type == "monthly"
+                red_df = data_df[(getSeason.(month.(data_df.date)) .== season) .& (Dates.dayofmonth.(data_df.date) .== nd), :]
+            else
+                red_df = data_df[(getSeason.(month.(data_df.date)) .== season) .& (Dates.dayofweek.(data_df.date) .== nd), :]
+            end
             # reshape in day x hour
             season_df = unstack(red_df,
                                 :hour_minutes, :date_only, :values);

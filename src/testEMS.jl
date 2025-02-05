@@ -252,20 +252,24 @@ function calcFullObj(result, data, s)
     # total cost
     # Wgrid*∫(cgrid,t)+pDep+Wloss*clossbess*∫(model[:ilossbess]/3600
     # Grid cost
-    λbuy=data["grid"].λ[:,1]*1e-3; # buy price [€/kWh]
-    λsell=data["grid"].λ[:,2]*1e-3; # sell price [€/kWh]
+    λbuy=data["grid"].λ[:,1]; # buy price [€/kWs]
+    λsell=data["grid"].λ[:,2]; # sell price [€/kWs]
     Pgpos=result[:"PgPos"]; # positive grid power
     Pgneg=result[:"PgNeg"]; # negative grid power
-    Cgrid=cumsum(Pgpos.*λbuy[it0:itend] + Pgneg.*λsell[it0:itend]).*Δt/3600;
+    Cgrid=cumsum(Pgpos.*λbuy[it0:itend] - Pgneg.*λsell[it0:itend]).*Δt;
     
     # Degradation cost
     Qlossbess=result[:"Qbess"][1].-result[:"Qbess"];
     if length(data["EV"]) != 1
         Qlossev=[result[:"Qev[$n]"][1].-result[:"Qev[$n]"] for n ∈ 1:nEV];
-        Qloss = Qlossbess .+ sum(Qlossev);
+        Qloss = data["BESS"].GenInfo.Ns * data["BESS"].GenInfo.Np * Qlossbess .+ # Ns * Np * Qbess
+                    sum(data["EV"][n].carBatteryPack.GenInfo.Ns * # Ns * Np * Qev
+                    data["EV"][n].carBatteryPack.GenInfo.Np * Qlossev[n] for n ∈ 1:nEV);
     else
         Qlossev=result[:"Qev[1]"][1].-result[:"Qev[1]"];
-        Qloss = Qlossbess .+ Qlossev;
+        Qloss = data["BESS"].GenInfo.Ns * data["BESS"].GenInfo.Np * Qlossbess .+
+                data["EV"][n].carBatteryPack.GenInfo.Ns *
+                data["EV"][n].carBatteryPack.GenInfo.Np * Qlossev;
     end    
     closs = 1.2; # [€/Ah]
     Closs = closs .* Qloss; # [€]

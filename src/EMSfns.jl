@@ -362,8 +362,8 @@ function costFunction!(model, sets::modelSettings, data::Dict; add_noise::Bool =
 
     # Note: We need to use hcat() to form the axis cause otherwise λ[:,c] broadcasts into a vector.
     # In order to stay consistent with the other DenseAxisArray we need matrices, so here hcat does that for us.
-    priceBuy=hcat(data["grid"].λ[it0:itend, 1])
-    priceSell=hcat(data["grid"].λ[it0:itend, 2])
+    priceBuy=hcat(data["grid"].λ[it0:itend, 1]) # in [c€/kWs]
+    priceSell=hcat(data["grid"].λ[it0:itend, 2]) # in [c€/kWs]
     if add_noise
         # simulated forecast
         ελ = randn(Int(length(priceBuy)*Δt/3600)) .* 20*1e-3/3600 # 20 €/MWh noise
@@ -379,7 +379,7 @@ function costFunction!(model, sets::modelSettings, data::Dict; add_noise::Bool =
 
     # Grid costs
     Wgrid = W[1]; # regularization factor for grid cost. max(λ)*max(P)
-    cgrid = Wgrid .* (model[:PgPos]*λbuy + model[:PgNeg]*λsell);
+    cgrid = Wgrid .* (model[:PgPos]*λbuy - model[:PgNeg]*λsell);
     # cgridᴰᴬ = Wgrid .* ((λbuyᴰᴬ-λsellᴰᴬ)/2 * (-Pgᴰᴬ*bPg + Pgᴰᴬ*(1 - bPg)) +
     #                  (λbuyᴰᴬ+λsellᴰᴬ)/2 * Pgᴰᴬ)
     # cgridᶜᵀ = Wgrid .* ((λbuyᶜᵀ-λsellᶜᵀ)/2 * abs(Pgᶜᵀ - Pgfᴰᴬ)) +

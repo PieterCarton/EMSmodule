@@ -277,7 +277,7 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     stgVars, ~ = Base.invokelatest(Simulate, perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
     # check if the solution has NaNs
     check = false
-    if any(isnan.(stgVars.Cell_SOC))
+if any(isnan.(stgVars.Cell_SOC))
         println("NaNs in the solution, $key is out of bounds.")
         # For the state Sₛₐ,ₜ₊₁, replace NaNs with the last valid value 
         iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the SoC NaNs
@@ -336,6 +336,7 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
         results["SoC$key"][shift+2] = copy(stgVars.Cell_SOC[end]);
         # stgAsset.GenInfo.SoC0 = copy(results["SoC$key"][2])
         stgAsset.GenInfo.SoC0 = copy(stgVars.Cell_SOC[end])
+        haskey(results, "vt$key") ? nothing : results["vt$key"] = copy(results["OCV$key"]);
         results["vt$key"][shift+1] = copy(stgVars.Cell_V[end]); # this one is up for debate CHECK
         results["i$key"][shift+1] = copy(stgVars.Iapp[end]);
     else # typeOpt == "day-ahead"

@@ -75,16 +75,19 @@ function update_stgAsset_deg!(stgAsset::BESSData, results::Dict, key::String; ty
     εₑ = copy(results["εₑ$key"])
     if typeOpt == "MPC"
         shift = 1;
-        stgAsset.GenInfo.SoHQ = copy(Qsa[shift+1]/Qsan);
+        # stgAsset.GenInfo.SoHQ = copy(Qsa[shift+1]/Qsan);
+        stgAsset.GenInfo.SoHQ = copy(Qsa/Qsan);
         stgAsset.GenInfo.SoHR0 = copy(R0);
         if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
-            stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[shift+1] / Qsa0)
+            # stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[shift+1] / Qsa0)
+            stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss / Qsa0)
             stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0);
         elseif typeof(stgAsset.PerfParameters) == ECMPerfParams
             stgAsset.PerfParameters.R0Param = copy([R0]);
         end
         if typeof(stgAsset.AgingParameters) == JinAgingParams
-            stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[shift+1] / Qsa0);
+            # stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[shift+1] / Qsa0);
+            stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss / Qsa0);
             stgAsset.AgingParameters.δSEI0 = copy(δSEI);
             stgAsset.AgingParameters.εₑ0 = copy(εₑ);
         end
@@ -277,7 +280,7 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     stgVars, ~ = Base.invokelatest(Simulate, perfModel.Cell, PsaOpt, "Power", Tk, SList, SoC0, A, B, C, D, tk)
     # check if the solution has NaNs
     check = false
-if any(isnan.(stgVars.Cell_SOC))
+    if any(isnan.(stgVars.Cell_SOC))
         println("NaNs in the solution, $key is out of bounds.")
         # For the state Sₛₐ,ₜ₊₁, replace NaNs with the last valid value 
         iNaN = findall(isnan.(stgVars.Cell_SOC)); # indeces of the SoC NaNs

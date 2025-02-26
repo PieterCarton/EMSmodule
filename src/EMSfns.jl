@@ -423,7 +423,7 @@ function costFunction!(model, sets::modelSettings, data::Dict; add_noise::Bool =
 
     # Define penalty for not charging
     WSoCDep = W[2]
-    pDep = (any(name.(all_variables(model)) .== "Pev[1]") ?
+    pDep = (any(name.(all_variables(model)) .== "PevPos[1]") ?
             WSoCDep*sum(model[:ϵSoC][n]^2 for n ∈ eachindex(model[:ϵSoC])) : 0);
 
     # Define objective function

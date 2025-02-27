@@ -387,7 +387,7 @@ function costFunction!(model, sets::modelSettings, data::Dict; add_noise::Bool =
 
     # Aging costs CHECK
     clossbess = 1.2; # cost of lost capacity EUR/Ah
-    # clossbess /= 3600; # cost of lost capacity EUR/As
+    clossbess /= 3600; # cost of lost capacity EUR/As
     Wloss=W[3]; # regularization factor for lost capacity
     if Wloss != 0.
         # cQloss = Wloss != 0 ? ( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600) : 0.0;

@@ -79,15 +79,15 @@ function update_stgAsset_deg!(stgAsset::BESSData, results::Dict, key::String; ty
         # stgAsset.GenInfo.SoHQ = copy(Qsa/Qsan);
         stgAsset.GenInfo.SoHR0 = copy(R0);
         if typeof(stgAsset.PerfParameters) == CIDRAPBROMPerfParams
-            # stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[shift+1] / Qsa0)
-            stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss / Qsa0)
+            stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss[shift+1] / Qsa0)
+            # stgAsset.PerfParameters.Cell.Neg.θ_100 = copy(stgAsset.PerfParameters.Cell.Neg.θ_100 .- Qloss / Qsa0)
             stgAsset.PerfParameters.Cell.Neg.RFilm = copy(R0);
         elseif typeof(stgAsset.PerfParameters) == ECMPerfParams
             stgAsset.PerfParameters.R0Param = copy([R0]);
         end
         if typeof(stgAsset.AgingParameters) == JinAgingParams
-            # stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[shift+1] / Qsa0);
-            stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss / Qsa0);
+            stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss[shift+1] / Qsa0);
+            # stgAsset.AgingParameters.z100p = copy(stgAsset.AgingParameters.z100p .- Qloss / Qsa0);
             stgAsset.AgingParameters.δSEI0 = copy(δSEI);
             stgAsset.AgingParameters.εₑ0 = copy(εₑ);
         end

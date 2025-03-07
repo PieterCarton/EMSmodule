@@ -75,6 +75,8 @@ function update_stgAsset_deg!(stgAsset::BESSData, results::Dict, key::String; ty
     εₑ = copy(results["εₑ$key"])
     if typeOpt == "MPC"
         shift = 1;
+        println(typeof(Qsa/Qsan))
+        println(Qsa)
         # stgAsset.GenInfo.SoHQ = copy(Qsa[shift+1]/Qsan);
         stgAsset.GenInfo.SoHQ = copy(Qsa/Qsan);
         stgAsset.GenInfo.SoHR0 = copy(R0);

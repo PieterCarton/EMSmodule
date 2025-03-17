@@ -641,6 +641,12 @@ end
     weights::Array{Float64} # cost weights Wgrid, WSoC, Wloss
 end
 
+# New methods for custom types
+function Base.copy(ms::modelSettings)
+    return modelSettings(nEV=ms.nEV, t0=ms.t0, Tw=ms.Tw, Δt=ms.Δt, steps=ms.steps, costWeights=copy(ms.costWeights), 
+                         season=ms.season, profType=ms.profType, loadType=ms.loadType, year=ms.year, cellID=ms.cellID)
+end
+
 # ################ MODEL CREATION ################
 
 # function build_data(; nEV::Int64=2, # number of EVs in the system

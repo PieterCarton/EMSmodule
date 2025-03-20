@@ -10,6 +10,7 @@ using Makie, CairoMakie, GLMakie
 include("makeEMSobjs.jl")
 include("EMSfns.jl")
 include("ESSfns.jl")
+include("EMSrfofns.jl")
 include("makeEMSplots.jl")
 include("simEMS.jl")
 include("testEMS.jl")

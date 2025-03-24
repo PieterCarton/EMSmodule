@@ -640,7 +640,11 @@ function concatResultsRH(results::Vector{Dict}; typeOpt::String="MPC")
                 RHdict[key] = γf
             else
                 # For other keys, use the original approach
-                RHdict[key] = vcat([results[st][key][1:shift+1] for st in 1:steps]...);
+                try
+                    RHdict[key] = vcat([results[st][key][1:shift+1] for st in 1:steps]...);
+                catch e
+                    continue
+                end
             end
         end
     end

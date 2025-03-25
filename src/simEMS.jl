@@ -325,7 +325,6 @@ function simulate_storage_asset!(stgAsset::BESSData, results::Dict, key::String;
     # update the results dictionary with PsaOpt
     if check
         PsaOpt = 1e-3*PsaOpt * stgAsset.GenInfo.Ns * stgAsset.GenInfo.Np; # pack power in kW
-        println(PsaOpt[1:upSampRatio:end])
         length(PsaOpt[1:upSampRatio:end]) == 1 ? results["P$key"][shift+1] = copy(PsaOpt[1:upSampRatio:end][1]) : 
                                                 results["P$key"] = copy(PsaOpt[1:upSampRatio:end]);
     end

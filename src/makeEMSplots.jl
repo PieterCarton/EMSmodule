@@ -190,23 +190,10 @@ function makeEMSplots(results::Dict, data::Dict;
                 iArr = findall(x -> x == 1, diff(γf))
                 # departure when γf changes from 1 to 0
                 iDep = findall(x -> x == -1, diff(γf))
-                
                 tDep = data["EV"][1].driveInfo.tDep;
                 tArr = data["EV"][1].driveInfo.tArr;
-                # iDep = []; iArr = [];
                 initDay = Int(floor(t[1]/3600/24)); endDay = initDay + length(t[1:96:end]);
-                # # for day ∈ 1:length(t[1:96:end])
-                # for day ∈ initDay:endDay
-                #         indDep = findmin(abs.(tDep[day] .- (Δt/3600:Δt/3600:24)))[2]
-                #         indArr = findmin(abs.(tArr[day] .- (Δt/3600:Δt/3600:24)))[2]
-                #         indDep = indDep + (day-1)*24/(Δt/3600)
-                #         indArr = indArr + (day-1)*24/(Δt/3600)
-                #         push!(iDep, indDep); push!(iArr, indArr)
-                # end
-                # # check if they are the same length.
                 iDep = Int.(iDep); iArr = Int.(iArr);
-        
-                # length(indDep) > length(indArr) ? append!(indArr, length(t)) : nothing
                 vspan!(eess_ax, t[iDep]/3600,t[iArr]/3600, ymax=100, color = (:grey, 0.2))
         end
         axislegend(eess_ax); limits!(eess_ax, t[1]/3600, t[end]/3600, 0, 100);
@@ -585,7 +572,7 @@ function optStatusPlots(results::Vector{Dict})
         # Legend(ga[1,2], [PolyElement(color=c) for c in colors],
         #         [L"\text{LOCALLY SOLVED}", L"\text{LOCALLY INFEASIBLE}"],framevisible=false)
         Legend(ga[1,2], [PolyElement(color=c) for c in colors[1:length(statusTypes)]],
-                String.(statusTypes),framevisible=false)
+                string.(statusTypes),framevisible=false)
         # status scatter plot
         Makie.scatter!(ax2,0.25:0.25:length(statusRes)/4, statusRes, label=L"\text{status}", strokewidth=0.5, strokecolor=:black);
         # consecutive INFEASIBLE runs

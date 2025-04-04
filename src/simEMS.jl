@@ -478,9 +478,9 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         # keyOpt = ["Pbess", PevKey, "Ptess", "Phpe"];
         # Phpe = results[:"Phpe"];
         # PaOpt = Dict();
-        Pbess = results["Pbess"][shift+1];
-        Phpe = results["Phpe"][shift+1];
-        Pev = [results["Pev[$n]"][shift+1] for n ∈ 1:nEV];
+        Pbess = haskey(results, "Pbess") ? results["Pbess"][shift+1] : 0.;
+        Phpe = haskey(results, "Phpe") ? results["Phpe"][shift+1] : 0.;
+        Pev = haskey(results, "Pev[1]") ? [results["Pev[$n]"][shift+1] for n ∈ 1:nEV] : zeros(nEV);
         
         # Second, we get the exogenous information.
         # P = P̂ + ϵ
@@ -506,11 +506,9 @@ function simTransitionFun!(results::Dict, data::Dict, s::modelSettings; typeOpt:
         end
     else # typeOpt == "day-ahead"
         # First, we get the optimal decisions from our policy function.
-        Pbess = results["Pbess"][1:shift+1];
-        Pev = [results["Pev[$n]"][1:shift+1] for n ∈ 1:nEV];
-        # check if we have a heat pump
-        haskey(results, "Phpe") ? Phpe = results["Phpe"][1:shift+1] : Phpe = zeros(shift+1);
-        
+        Pbess = haskey(results, "") ? results["Pbess"][1:shift+1] : zeros(shift+1);
+        Phpe = haskey(results, "Phpe") ? results["Phpe"][1:shift+1] : zeros(shift+1);
+        Pev = haskey(results, "") ? [results["Pev[$n]"][1:shift+1] for n ∈ 1:nEV] : [zeros(shift+1) for n ∈ 1:nEV]; 
         # Second, we get the exogenous information.
         # # P = P̂ + ϵ
         # Ple = data["grid"].loadE + rand(data["grid"].loadE);

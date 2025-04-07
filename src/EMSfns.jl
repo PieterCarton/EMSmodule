@@ -317,7 +317,7 @@ function pei!(model::InfiniteModel, sets::modelSettings, data::Dict; add_noise::
     
     # Power balance DC busbar
     # If we have EVs
-    if any(name.(all_variables(model)) .== "Pev[1]")
+    if any(name.(all_variables(model)) .== "PevPos[1]")
         Pev_sum = nEV != 1 ? sum(model[:γf][n].*model[:Pev][n] for n in 1:nEV) : sum(model[:γf].*model[:Pev][n] for n in 1:nEV)
     else
         Pev_sum = 0

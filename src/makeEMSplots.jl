@@ -106,6 +106,15 @@ function makeEMSplots(results::Dict, data::Dict;
         if backend == "CairoMakie"
                 CairoMakie.activate!(type="svg")
         else
+                try
+                        using GLMakie
+                catch e
+                        if e isa InitError # Or check for the specific GLFW error
+                                return error("GLMakie could not be loaded. Ensure you have a display server or use a headless backend.")
+                        else
+                                return rethrow(e)
+                        end
+                end
                 GLMakie.activate!()
         end
 
@@ -242,6 +251,15 @@ function compareEB(results::Vector{Dict}, data::Dict)
         # This function overlaps the electric power balance of various EMS runs.
         # It is called by the wrapper script, wrapperEMS.ipynb.
         # The function takes the optimized model and the settings as input.
+        try
+                using GLMakie
+        catch e
+                if e isa InitError # Or check for the specific GLFW error
+                        return error("GLMakie could not be loaded. Ensure you have a display server or use a headless backend.")
+                else
+                        return rethrow(e)
+                end
+        end
         GLMakie.activate!()
         set_theme!(theme_latexfonts())
 
@@ -351,7 +369,8 @@ function compareEMSplots(results::Dict)
         # quiver!([11], [15], quiver=([-1], [7]), color=:black)
         # annotate!([11.5], [12],L"\textrm{No\ deg.}")
 
-        return display(GLMakie.Screen(), fig)
+        # return display(GLMakie.Screen(), fig)
+        return fig
 end
 
 function compareTESS(results::Dict)
@@ -412,7 +431,7 @@ function countourSP(results,
                 (-12.5,12.5,0.1,1.0),
                 (-6.0,6.0,0.1,1.0)],
         )
-# This function creates the contour plots (SoC vs P) of the different ESS.
+        # This function creates the contour plots (SoC vs P) of the different ESS.
         i=0
         cmaps = [:algae, :reds, :blues, :balance]
         # Create a heatmap

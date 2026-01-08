@@ -2,16 +2,16 @@ module EMSmodule
 
 using JuMP, InfiniteOpt, LinearAlgebra, Distributions, Interpolations
 using Parameters, Random
-using JSON3, MAT, CSV, StatsBase, DataFrames, Dates, LiiBRA, GaussianMixtures,  Serialization
+using JSON3, MAT, CSV, StatsBase, DataFrames, Dates, LiiBRA, GaussianMixtures, Serialization
 using LaTeXStrings, ColorSchemes
 using XLSX, StateSpaceModels, Statistics, TimeSeries
-# using Makie, CairoMakie, GLMakie
-using Makie, CairoMakie
+using Makie, CairoMakie, GLMakie
 
 include("makeEMSobjs.jl")
 include("EMSfns.jl")
 include("ESSfns.jl")
 include("EMSrfofns.jl")
+include("thermfns.jl")
 include("makeEMSplots.jl")
 include("simEMS.jl")
 include("testEMS.jl")

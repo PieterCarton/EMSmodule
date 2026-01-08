@@ -6,8 +6,8 @@
 
 # By: Darío Slaifstein, PhD-student @TU Delft, DCES.
 # Branch: RFO_ITEC2024
-# Version: 0.1
-# Date: 10/09/2024
+# Version: 0.2
+# Date: 01/07/2025
 
 ## Modeling functions
 # These functions are used to build the EMS model object. They include the device models, the grid balances and cost function.
@@ -47,119 +47,6 @@ end
     carBatteryPack::BESSData # battery pack
     driveInfo::driveDataRFO # driving information
 end
-
-# function rejCriteriaEnergy(μDrive, σDrive, tDep, tArr, Tconn, Ns, Np, vmax, Q0, chgPmax)
-#     Pdrive = rand(truncated(Normal(μDrive, σDrive); lower = 0.01), length(tDep));
-#     Ereq = Pdrive .* (tArr .- tDep) # energy required for each session [kWh]
-#     Emax = chgPmax .* Tconn # max energy that can be charged [kWh]
-#     Eev = Ns .* Np .* vmax .* Q0 .* 1e-3 * 0.8 # 80% energy of the EV battery [kWh]
-#     # Check if the energy required is less than the max energy that can be charged
-#     # if not adjust the demanded Pdrive
-#     for i ∈ 1:length(Ereq)
-#         if Ereq[i] > Emax[i] || Ereq[i] > Eev
-#             # pick the lowest bound between charger and EV battery
-#             println("Energy required for session $i is too high")
-#             if Emax[i] < Eev
-#                 # adjust the power to the max that can be charged
-#                 println("Adjusting power to the max that can be charged")
-#                 println("From $(Ereq[i]) kWh to $(Emax[i]) kWh")
-#                 Pdrive[i] = Emax[i] / (tArr[i] - tDep[i])
-
-#             else
-#                 println("Adjusting power to the max that can be charged")
-#                 println("From $(Ereq[i]) kWh to $(Eev) kWh")
-#                 Pdrive[i] = Eev / (tArr[i] - tDep[i])
-#             end
-#         end
-#     end
-#     return Pdrive, Ereq, Emax
-# end
-
-# # to generate samples
-# function availabilityEV(ns, # number of samples
-#     fs::Int64 = 4, # samples per hour
-#     μDrive::Float64 = 3.5, # mean of Pdrive [kW]
-#     σDrive::Float64 = 1.5, # standard dev. of Pdrive [kW]
-#     Ns::Int64 = 100, # number of series cells
-#     Np::Int64 = 25, # number of parallel Branches
-#     vmax::Float64 = 4.2, # max voltage [V]
-#     Q0::Float64 = 5.2, # initial capacity [Ah]
-#     chgPmax::Float64 = 17.5, # EV charger limits [kW]
-#     type::String = "det", # type of availability
-#     )
-#     @assert type ∈ ["det","rfo", "mean"] "Invalid type of availability"
-
-#     ndays=Int(floor(ns/fs/24)); # number of days
-
-#     # First, we create availability vectors for each EV in the disc t-domain.
-#     γ = ones(ns)
-
-#     # using the data from Elaadusing Serialization
-#     # Deserialize the mixture model
-#     open("../data/gmmElaadFit.dat", "r") do f
-#         global gmm = deserialize(f) # Gaussian Mixture Model
-#     end
-#     # load the lookup table of the connection times
-#     μtCon_tarr_df = CSV.read("../data/input/Elaad Data/Data downloaded/mean-session-length-per.csv",
-#                         DataFrame,silencewarnings=true);
-#     # sort following the arrival times
-#     sort!(μtCon_tarr_df, "Arrival Time")
-#     # add a column with the arrival time in hs
-#     μtCon_tarr_df.tArr = collect(0:0.5:23.5)
-#     gmmt = truncated(gmm, 0, 23.5) # truncate the GMM to the limits
-#     # get the median of the GMM
-#     if type == "mean"
-#         tArr  = [mean(gmm) for i ∈ 1:(ndays+1)]
-#     else
-#         tArr = rand(gmmt, ndays+1)
-#     end
-#     # Interpolate mean session length for arrival times
-#     tCon_interp = linear_interpolation(μtCon_tarr_df.tArr, μtCon_tarr_df.home)
-#     Tconn = tCon_interp.(tArr) # session length
-#     tDep = tArr .+ Tconn
-
-#     # Adjust departure times if outside the limits
-#     tDep = [td > 23.5 ? td - 23.5 : td for td ∈ tDep]
-    
-#     # Adjust first arrival and last departure times
-#     tDep = tDep[1:end-1]
-#     tArr = tArr[2:end]
-
-#     # Ensure departure time is before arrival time and not 0
-#     tDep = [t == 0 ? 0.5 : t for t in tDep]
-#     tArr = [tDep[i] > t ? tDep[i] + 1.0 : t for (i, t) in enumerate(tArr)]
-    
-#     # Create the availability signal
-#     for day in 1:ndays
-#         # Determine the time indices corresponding to arrival and departure for this day
-#         t = collect(0:1/fs:(24-1/fs))
-#         # get the index of the departure and arrival times
-#         depIdx = findmin(abs.(tDep[day] .- t))[2]
-#         arrIdx = findmin(abs.(tArr[day] .- t))[2]
-#         # modify the index to be in the range of the time series, to avoid modifying supports
-#         tDep[day] = t[depIdx]
-#         tArr[day] = t[arrIdx]
-#         # Correct for the day
-#         depIdx = depIdx + (day-1)*24*fs
-#         arrIdx = arrIdx + (day-1)*24*fs
-#         # Mark the time series as parked during the parked interval for this day
-#         if depIdx <= arrIdx
-#             γ[depIdx:arrIdx] .= 0
-#         end
-#     end
-
-#     # Since we removed the the first element of tArr, 
-#     # the session length is the same as the first tDep append
-#     # the first element of tDep in the first position of Tconn
-#     # Tconn = [tDep[1]; Tconn]; Tconn = Tconn[1:end-1];
-#     Tconn = [24. + tDep[i] - tArr[i-1] for i ∈ 2:ndays]
-#     Tconn = [tDep[1]; Tconn]
-
-#     # Create the driving signal
-#     Pdrive, Ereq, Emax = rejCriteriaEnergy(μDrive, σDrive, tDep, tArr, Tconn, Ns, Np, vmax, Q0, chgPmax)
-    
-#     return γ, tDep, tArr, Pdrive, Tconn, Ereq, Emax;
-# end
 
 function getResultsRFO(model)
     x = all_variables(model)
@@ -368,32 +255,6 @@ function evRFO!(model::InfiniteModel, sets::modelSettingsRFO, data::Dict) # elec
         PevMin[n] .≤ PevTot[i ∈ 1:num_samples, n ∈ 1:nEV] .≤ PevMax[n], Infinite(t)  # total power of each EV, driving+V2G
         SoCevMin[n] .* Eev0[n] .≤ SoCev[i ∈ 1:num_samples, n ∈ 1:nEV] .≤ SoCevMax[n] .* Eev0[n], (start = SoCev0[n] .* Eev0[n]), Infinite(t) # State of Charge [kWh]
     end);
-
-    #= BINARY VARIABLE STUFF
-        @variables(model, begin
-            Pev[i ∈ 1:num_samples, n ∈ 1:nEV], Infinite(t)  # EV charger power 
-            bPev[i ∈ 1:num_samples, n ∈ 1:nEV], Infinite(t), Bin  # EV charger power binary
-            PevTot[i ∈ 1:num_samples, n ∈ 1:nEV], Infinite(t)  # total power of each EV, driving+V2G
-            SoCevMin[n] .* Eev0[n] .≤ SoCev[i ∈ 1:num_samples, n ∈ 1:nEV] .≤ SoCevMax[n] .* Eev0[n], (start = SoCev0[n] .* Eev0[n]), Infinite(t) # State of Charge [kWh]
-            # Nsev[n].*aOCV[n] .≤ OCVev[i ∈ 1:num_samples, n ∈ 1:nEV] .≤ Nsev[n] .* (aOCV[n]+bOCV[n]), Infinite(t) # open circuit voltage of the cell
-            # iev[i ∈ 1:num_samples, n ∈ 1:nEV], Infinite(t)  # total current per branch
-            # Dummy variables for bidirectional flow
-            0 ≤ PevPos[i ∈ 1:num_samples, n ∈ 1:nEV], Infinite(t) # Pev^+ out power   
-            PevNeg[i ∈ 1:num_samples, n ∈ 1:nEV] ≤ 0, Infinite(t) # Pev^- in power
-        end);
-        @constraints(model, begin
-            [i ∈ 1:num_samples, n ∈ 1:nEV], PevNeg[i,n] + PevPos[i,n] == Pev[i,n]
-            [i ∈ 1:num_samples, n ∈ 1:nEV], bPev[i,n]*PevMin[n] ≤ PevNeg[i,n]
-            [i ∈ 1:num_samples, n ∈ 1:nEV], PevPos[i,n] ≤ (1-bPev[i,n])*PevMax[n]
-            [i ∈ 1:num_samples, n ∈ 1:nEV], SoCev[i,n](t0) == SoCev0[n] .* Eev0[n] # Initial conditions
-        end);
-        @constraints(model, begin
-            [i ∈ 1:num_samples, n ∈ 1:nEV], γf[i,n].*Pev[i,n] + Pdrivef[i,n] - PevTot[i,n] .== 0 # power balance
-            [i ∈ 1:num_samples, n ∈ 1:nEV], ∂.(SoCev[i,n], t) .== -(ηev[n] * bPev[i,n] + (1-bPev[i,n]))*PevTot[i,n]
-            # [i ∈ 1:num_samples, n ∈ 1:nEV], OCVev[i,n] .== aOCV[n]+bOCV[n]*SoCev[i,n] # linear voltage model
-            # [i ∈ 1:num_samples, n ∈ 1:nEV], iev[i,n] .== 1e3*PevTot[i,n]/Npev[n]/Nsev[n]/OCVev[i,n] # current per branch
-        end);
-    =#
     
     # Now we need to project it into the cont t-domain.
     # create the samples for the availability in ℝ^(nₛ × nₑᵥ)

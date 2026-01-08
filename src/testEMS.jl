@@ -56,6 +56,50 @@ function testPBalance(results::Dict, data::Dict)
     return ff
 end
 
+function testThBalance(results::Dict, data::Dict)
+    # Extract the optimal power time-series for the storage device
+    t = results["t"]
+    Δt = t[2] - t[1]
+    status = true
+    # TESS
+    # ∂.(Ttess, t) * mtess * ctess .== Q̇ₕₚᵗᵉˢˢ - Q̇ₜₑₛₛᴰ - Q̇sd .== Q̇ₜₑₛₛ
+    Q̇ₕₚᵗᵉˢˢ = results["Q̇ₕₚᵗᵉˢˢ"]; Ttess = results["Ttess"];
+    Q̇ₜₑₛₛᴰ = results["Q̇ₜₑₛₛᴰ"];
+    mtess = data["TESS"].m; # tank mass [kg]
+    ctess = data["TESS"].c; # tank specific heat capacity [J/kg.K]
+    Qtess = mtess * ctess
+    Q̇sd = -0.001*Qtess # 0.1% of the capacity per hour
+    Q̇tess = Q̇ₕₚᵗᵉˢˢ .- Q̇ₜₑₛₛᴰ .- Q̇sd;
+    Ttess_Q = calculateSoCFromP(Q̇tess, Δt, 1, Qtess, Ttess[1])
+    println("TESS")
+    if !checkSoCFeasibility(Ttess_Q, Ttess)
+        status = false
+        checkBounds(Ttess_Q)
+    end
+
+    # Building
+    # ∂.(Tin, t) * (Cb + Vb * ρair * Cair) .== Q̇ir .+ Q̇ₜₑₛₛᴰ + Q̇ₕₚᴰ - Q̇loss
+    Q̇ₕₚᴰ = results["Q̇ₕₚᴰ"]; Tin = results["Tin"];
+    Q̇ir = results["Q̇ir"]; Q̇loss = results["Q̇loss"];
+    Cair = 0.279*1e-3; # air capacity [kWh/kg.K]
+    ρair = 1.225 # air density [kg/m³]
+    Vb = 585 # building volume m³
+    Cb = 4.755 #building thermal capacity kWh/K
+    mtess = data["TESS"].m; # tank mass [kg]
+    ctess = data["TESS"].c; # tank specific heat capacity [J/kg.K]
+    Q̇sd = -0.001*Qtess # 0.1% of the capacity per hour
+    Q̇b = Q̇ir .+ Q̇ₜₑₛₛᴰ + Q̇ₕₚᴰ - Q̇loss;
+    Qb = Cb + Vb * ρair * Cair
+    Tin_Q = calculateSoCFromP(Q̇b, Δt, 1, Qb, Tin[1])
+    println("Building")
+    if !checkSoCFeasibility(Tin_Q, Tin)
+        status = false
+        checkBounds(Ttess_Q)
+    end
+
+    return status 
+end
+
 function testP(results::Dict, data::Dict)
     # Extract the optimal power time-series for the storage device
     t = results["t"]

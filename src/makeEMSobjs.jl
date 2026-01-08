@@ -9,22 +9,9 @@
 #  - getSeasonalProfiles: gets the seasonal profiles for each device. The profiles can be daily or weekly.
 #  - availabilityEV: creates availability vectors for each EV in the disc t-domain.
 # By: Darío Slaifstein, PhD-student @TU Delft, DCES.
-# Branch: agingModeling
-# Version: 1.4
-# Date: 13/09/2023
-
-# # example from the knapsack problem of the docs
-# https://jump.dev/JuMP.jl/stable/tutorials/getting_started/design_patterns_for_larger_models/
-# struct EMSObject
-#     profit::Float64
-#     weight::Float64
-#     function EMSObject(profit::Float64, weight::Float64)
-#         if weight < 0
-#             throw(DomainError("Weight of object cannot be negative"))
-#         end
-#         return new(profit, weight)
-#     end
-# end
+# Branch: thermal_models_new2
+# Version: 1.5
+# Date: 04/07/2025
 
 ################ FUNCTION DEFINITIONS ################
 function fromSecTo15min(x::Array)
@@ -48,6 +35,8 @@ function processPrices(df;
     upSampRatio::Int=4, # samples per hour
     profType::String="daily",
     season::String="summer",
+    market::String = "day-ahead",
+    year::Int=2023
     )
     # This function processes the prices data from EPEX in several formats.
     # type:
@@ -56,39 +45,61 @@ function processPrices(df;
     # The price data is in [€/MWh]
     @assert type ∈ ["raw", "summary"] "Invalid type of data"
     @assert profType ∈ ["daily", "weekly", "biweekly","monthly","yearly"] "Invalid profile type"
+    @assert market ∈ ["day-ahead", "IDA", "CT"] "Invalid market type"
     profType == "yearly" ? nothing : @assert season ∈ ["summer", "winter"] "Invalid season";
     
-    if type=="raw"        
-        select!(df, Not(:"Hour 3B")) # eliminate that weird column
-        df=coalesce.(df, 0) # replace missing values with 0
-        
-        # Now we need to reshape the DataFrame into a timeseries
-        priceData = Vector{Float64}();
-        for r in 1:nrow(df)
-            row=Vector{Float64}(df[r,2:25])
-            append!(priceData, row)
+    if market !== "CT"
+        if type=="raw"
+            # Raw EPEX FTP server data
+            # eliminate clearence hour B column
+            priceData = Vector{Float64}();
+            df=coalesce.(df, 0) # replace missing values with 0
+            if market == "day-ahead"
+                select!(df, Not(:"Hour 3B"));
+                # Now we need to reshape the DataFrame into a timeseries
+                for r in 1:nrow(df)
+                    row=Vector{Float64}(df[r,2:(24+1)])
+                    append!(priceData, row)
+                end
+                priceData = repeat(priceData, inner=upSampRatio)
+            elseif market == "IDA"
+                select!(df, Not([:"Hour 3B Q1", :"Hour 3B Q2", :"Hour 3B Q3", :"Hour 3B Q4"]));
+                for r in 1:nrow(df)
+                    row=Vector{Float64}(df[r,2:(24*4+1)])
+                    append!(priceData, row)
+                end
+            end
+            
+        elseif type=="summary"
+            priceData=Vector{Float64}(df[:,:mean])
         end
-    elseif type=="summary"
-        priceData=Vector{Float64}(df[:,:mean])
+    else
+        priceData = df.IndexPrice[:];
     end
+    
     # Change resolution of the prices. From 1h/sample to 15min/sample
-    priceData = repeat(priceData, inner=upSampRatio);
     priceData=[0; priceData]
     if profType == "yearly"
         return priceData = [priceData priceData.*0.95]
     end
     # for the rest of the profiles you continue with the seasonal profiles
-    priceData=getSeasonalProfiles(priceData; type=profType, n_samples_per_hour = upSampRatio)[season];
+    priceData=getSeasonalProfiles(priceData[1:365*24*upSampRatio+1]; type=profType, n_samples_per_hour = upSampRatio, year =  year)[season];
     # for biweekly profiles we need to repeat the weekly profile twice and append the first day to the end
     if profType == "biweekly"
         priceData=repeat(priceData[1:(end-upSampRatio*24)], outer=2); append!(priceData, priceData[1:upSampRatio*24])
     end
-    # Buy < sell prices 
-    priceData = [priceData priceData.*0.95]
+    # Buy < sell prices
+    if market == "day-ahead"
+        priceData = [priceData priceData.*0.95] # 5% discount for the buy prices
+    elseif market == "IDA"
+        # priceData = [priceData priceData.*0.95] # 5% discount for the buy prices
+        priceData = [priceData priceData.*0.8] # 20% discount for the buy prices
+    elseif market == "CT"
+        priceData = [priceData priceData.*0.8] # 20% discount for the buy prices
+    end
     # priceData=CSV.read("energy_prices.csv", DataFrame);  # old data from Wil
     return priceData;
 end;
-
 # define a function to get the season from a month
 function getSeason(month::Int)
     if month in 3:5
@@ -105,6 +116,7 @@ end
 function getSeasonalProfiles(data::Vector;
     n_samples_per_hour::Int=4, # number of samples per hour
     type::String="daily", # type of profile to return
+    year::Int=2023
     )
     # check the type of profile
     @assert type ∈ ["monthly", "biweekly", "weekly", "daily"] "Invalid profile type"    
@@ -114,8 +126,8 @@ function getSeasonalProfiles(data::Vector;
     type == "biweekly" ? n_days=7 : nothing;
     type == "monthly" ? n_days=30 : nothing;
     # Get seasonal profiles for each device
-    start_date = DateTime("2023-01-01T00:00:00")
-    end_date = DateTime("2023-12-31T24:00:00")
+    start_date = DateTime("$(year)-01-01T00:00:00")
+    end_date = DateTime("$(year)-12-31T24:00:00")
     step = Dates.Minute(60/n_samples_per_hour)    
     date_range = start_date:step:end_date
 
@@ -264,7 +276,9 @@ end
     iRn0::Array{Float64}=zeros(size(R0Param)); # current for the poles R1...Rn [Ω]
 end
 
-@with_kw mutable struct CIDRAPBROMPerfParams <: PerfParams
+abstract type PBROMParams <: PerfParams end
+
+@with_kw mutable struct CIDRAPBROMPerfParams <: PBROMParams
 # Physics-Based Reduced Order Model made with CIDRA (CIDRA-PBROM) from LiiBRA.jl, Planden (2022).
 # Default values from Chen (2020), LG M50 cells.
     # [1] Planden (2022) doi: 10.1016/j.est.2022.105637
@@ -281,6 +295,60 @@ end
         # yₖ =C*xₖ+D*uₖ
         C::Matrix{Float64}
         D::Matrix{Float64}
+        # Electrochemical parameters
+        # - z0pₖ, k ∈ [pos,neg] z @ 0% Lithium Concentration
+        # - z100pₖ, k ∈ [pos,neg] z @ 100% Lithium Concentration
+        # - cs_maxₖ, k ∈ [pos,neg] max electrode/solid concentration
+        # - ce0 electrolyte concentration
+        # - αₖ k ∈ [pos,neg] charge transfer coefficient
+        # - kₖ k ∈ [pos,neg] reaction rate constant
+        # - t₀⁺ initial transference number
+
+        # Positive electrode
+        z100p_Pos::Float64 = 0.910612 # Theta @ 100% Lithium Concentration
+        z0p_Pos::Float64 = 0.0263473 # Theta @ 0% Lithium Concentration
+        cs_max_Pos::Float64 = 63104 # Max Electrode Concentration
+        α_Pos::Float64 = 0.5 # Alpha Factor
+        RFilm_Pos::Float64 = 0 # Film Resistance - Ωm²
+        k_Pos::Float64 = 3.54458e-11 # Reaction Rate
+
+        # Negative electrode
+        z100p_Neg::Float64 = 0.263849 #0.27 # Theta @ 100% Lithium Concentration
+        z0p_Neg::Float64 = 0.853974 #0.9084 # Theta @ 0% Lithium Concentration
+        cs_max_Neg::Float64 = 33133 # Max Electrode Concentration
+        α_Neg::Float64 = 0.5 # Alpha Factor
+        RFilm_Neg::Float64 = 0 # Film Resistance - Ωm²
+        k_Neg::Float64 = 6.716047e-12 # Reaction Rate
+        
+        # Initial Electrolyte Concentration (mol m⁻³)
+        ce0::Float64 = 1000
+        t₀⁺::Float64 = 0.363 # Initial transference number
+    =#
+end
+
+@with_kw mutable struct ROMPerfParams <: PBROMParams
+# Fast Physics-Based Reduced Order Model made with CIDRA (CIDRA-PBROM) from LiiBRA.jl, Planden (2022).
+# This is the same as CIDRAPBROMPerfParams but with precomputed state space matrices.
+# Thus, at each LiiBRA.Simulate call its not necessary to LiiBRA.Realise the state space matrices again.
+# Default values from Chen (2020), LG M50 cells.
+    # [1] Planden (2022) doi: 10.1016/j.est.2022.105637
+    # [2] Chen (2020) doi: 10.1016/j.est.2022.105637
+    type::String="PBROM"
+    Sₑ::Int64 = 4 # Spatial points in electrolyte
+    Sₛ::Int64 = 2 # Spatial point in solid
+    SList::Vector{Float64}= [1., 0.15]# SoC list for the state space matrices
+    # Cell = Spatial!(Construct("LG M50"), Sₑ, Sₛ) # Cell type from LiiBRA.jl
+    Cell
+    # State space matrices
+    # Transition matrices
+    # xₖ₊₁=A*xₖ+B*uₖ
+    A::Tuple{Matrix{Float64}, Matrix{Float64}}
+    B::Tuple{Vector{Float64}, Vector{Float64}}
+    # Output matrices
+    # yₖ =C*xₖ+D*uₖ
+    C::Tuple{Matrix{Float64}, Matrix{Float64}}
+    D::Tuple{Vector{Float64}, Vector{Float64}}
+    #=
         # Electrochemical parameters
         # - z0pₖ, k ∈ [pos,neg] z @ 0% Lithium Concentration
         # - z100pₖ, k ∈ [pos,neg] z @ 100% Lithium Concentration
@@ -371,7 +439,7 @@ end
     kSEI::Float64=66.85; # kinetic rate [1/√sec] CHECK
     ESEI::Float64=39146.0;# Activation energy [J/mol]
     initT::Float64=900.; # initial life time [s]
-    δSEI0::Float64=2.0-9; # initial value of the SEI layer thickness [m]
+    δSEI0::Float64=1.0e-10; # initial value of the SEI layer thickness [m]
     # initδSEI::Float64=2.0-4; # initial value of the SEI layer thickness [m]
     
     # Yang (2017) & Safari (2009) [3,4]
@@ -618,6 +686,62 @@ end
     capex::Float64= 15000; # capital expenditure [USD/kWh]
 end
 
+# Temperature based TESS model object
+@with_kw mutable struct TESSData_T <: StorageAssetData
+    m::Float64 = 4000; # mass [kg]
+    c::Float64 = 4200; # specific heat capacity [J/kg.K]
+    T0::Float64 = 65.; # Initial T [ᵒC]
+    TLim::Array{Float64} = [50., 95.]; # Min-Max T [ᵒC]
+    QLim::Array{Float64} = [-5, 5]; # Min-Max power [kW]
+    Q::Float64 = c * m * (TLim[2] - TLim[1]) / 3600 / 1e3; # Capacity [kWh]
+    η::Float64 = 0.95; # thermal efficiency [p.u.]
+    capex::Float64 = 15000; # capital expenditure [USD/kWh]
+end
+
+@with_kw mutable struct HPData
+    RatedPower::Float64 = 4 # rated electrical power [kW]
+    capex::Float64 = 500 # capital expenditure [USD/kW]
+    η::Float64 =0.8 # thermal efficiency of the heat exchanger of the HP [p.u.]
+    mdot::Float64 = 0.22; # mass flow of the fluid [kg/s] Nikos uses 0.8m³/h
+    c::Float64 = 4200; # specific heat capacity [J/kg.K]
+end
+
+@with_kw mutable struct gridData_T <: ConnectionData
+    PowerLim::Array{Float64} # Max-Min power [kW]
+    η::Float64 # multiport-converter efficiency [p.u.]
+    λ::Array # energy prices. [buy; sell] 
+    loadE::Array{Float64}; # electrical load measurement
+end
+# Building data
+# U-values in W/m².K
+U_roof = 0.19570815450643778; 
+U_wall = 1.5974515364593451; 
+U_windows = 0.2495049504950495;
+
+windows_area = 12.0; 
+walls_area = 219.50400000000002; 
+roof_Area = 156.64887471987342;
+
+@with_kw mutable struct BuildingData
+    Cair::Float64 = 0.279*1e-3; # air capacity [kWh/kg.K]
+    ρair::Float64 = 1.225 # air density [kg/m³]
+    Cb::Float64 = 4.755 #building thermal capacity [kWh/K]
+    Vb::Float64 = 585. # building volume [m³]
+    sb::Float64 = 0.5 # building solar heat gain coefficient of the windows
+    wb::Float64 = 0.3 # building wall-to-wall ratio
+    rb::Float64 = 0.35 # air change rate [1/h]
+    d = [0.03, 0.23, 0.23, 0.015] # thickness of the surfaces [m]
+    U = [U_roof, U_windows, U_wall] * 1e-3 # Conductivity of the surfaces [kW/m².K]
+    A = [roof_Area, windows_area, walls_area] # area of the surfaces [m²]
+    mdot::Float64 = 0.22; # mass flow of the fluid [kg/s] Nikos uses 0.8m³/h
+    cf = 4200; # specific heat capacity of the fluid [J/kg.K]
+    Tsup::Float64 = 50 + 273; # supply temperature setpoint [K]
+    Tin0::Float64 = 12 + 273; # initial inside temperature [K] 
+    ambT::Array{Float64}; # ambient temperature measurement
+    Gir::Array{Float64}; # irradiance measurement
+    occupancy::Array{Float64}; # occupancy measurement
+end
+
 # Power Electronic Interface
 @with_kw mutable struct peiData
     RatedPower::Float64=10; # rated power [kW]
@@ -641,10 +765,23 @@ end
     weights::Array{Float64} # cost weights Wgrid, WSoC, Wloss
 end
 
+# typeOpt replacement with multiple dispatch
+struct DayAhead end
+struct CT_RL end
+struct CT_MPC end
+
 # New methods for custom types
 function Base.copy(ms::modelSettings)
     return modelSettings(nEV=ms.nEV, t0=ms.t0, Tw=ms.Tw, Δt=ms.Δt, steps=ms.steps, costWeights=copy(ms.costWeights), 
                          season=ms.season, profType=ms.profType, loadType=ms.loadType, year=ms.year, cellID=ms.cellID)
+end
+
+function Base.copy(bess::BESSData)
+    return BESSData(GenInfo=bess.GenInfo, PerfParameters=bess.PerfParameters, AgingParameters=bess.AgingParameters, cellID=bess.cellID)
+end
+
+function Base.copy(ev::EVData)
+    return EVData(carBatteryPack=ev.carBatteryPack, driveInfo=ev.driveInfo)
 end
 
 # ################ MODEL CREATION ################

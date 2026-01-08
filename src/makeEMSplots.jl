@@ -106,15 +106,6 @@ function makeEMSplots(results::Dict, data::Dict;
         if backend == "CairoMakie"
                 CairoMakie.activate!(type="svg")
         else
-                try
-                        using GLMakie
-                catch e
-                        if e isa InitError # Or check for the specific GLFW error
-                                return error("GLMakie could not be loaded. Ensure you have a display server or use a headless backend.")
-                        else
-                                return rethrow(e)
-                        end
-                end
                 GLMakie.activate!()
         end
 
@@ -251,16 +242,7 @@ function compareEB(results::Vector{Dict}, data::Dict)
         # This function overlaps the electric power balance of various EMS runs.
         # It is called by the wrapper script, wrapperEMS.ipynb.
         # The function takes the optimized model and the settings as input.
-        try
-                using GLMakie
-        catch e
-                if e isa InitError # Or check for the specific GLFW error
-                        return error("GLMakie could not be loaded. Ensure you have a display server or use a headless backend.")
-                else
-                        return rethrow(e)
-                end
-        end
-        GLMakie.activate!()
+        CairoMakie.activate!()
         set_theme!(theme_latexfonts())
 
         fig = Figure(size=(650,450))
@@ -593,11 +575,11 @@ function optStatusPlots(results::Vector{Dict})
         Legend(ga[1,2], [PolyElement(color=c) for c in colors[1:length(statusTypes)]],
                 string.(statusTypes),framevisible=false)
         # status scatter plot
-        Makie.scatter!(ax2,0.25:0.25:length(statusRes)/4, statusRes, label=L"\text{status}", strokewidth=0.5, strokecolor=:black);
+        Makie.scatter!(ax2,0.25:0.25:length(statusRes)/4, statusRes, label=L"\text{status}", strokewidth=0.5, strokecolor=colors[1], color=(colors[1],0.5));
         # consecutive INFEASIBLE runs
         xs = 0.25:0.25:length(results)/4;
         ys=[length(results[ts][:"t"]) for ts in 1:length(results)];
-        barplot!(ax3, xs, -maximum(ys) .+ ys, color = colors[1], strokecolor = :black, strokewidth = 1)
+        barplot!(ax3, xs, -maximum(ys) .+ ys, color = colors[1])
         # fig
         return fig
 end

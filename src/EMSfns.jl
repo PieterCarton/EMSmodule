@@ -3,9 +3,9 @@
 # The functions are mainly the device models (solar pv, bess, tess, etc.) and other elements (grid balances) of the EMS problem.
 
 # By: Darío Slaifstein, PhD-student @TU Delft, DCES.
-# Branch: new_mpec_1
-# Version: 1.5
-# Date: 10/01/2025
+# Branch: main
+# Version: 1.6
+# Date: 16/09/2025
 
 ## Modeling functions
 # These functions are used to build the EMS model object. They include the device models, the grid balances and cost function.
@@ -44,158 +44,14 @@ function spv!(model::InfiniteModel, data::Dict; add_noise::Bool = true) # solar 
     # make new time window
     it0 = round(Int,(t0/Δt));
     itend = it0+length(supports(t))-1;
-    
     MPPTmeas = data["SPV"].MPPTData[it0:itend];
     MPPTnoisy = copy(MPPTmeas);
     if add_noise
         # simulated forecast
         MPPTnoisy[MPPTmeas .> 0] = [rand(Uniform(0.5*MPPTmeas[tt],1.1*MPPTmeas[tt])) for tt ∈ findall(MPPTmeas .> 0)]
     end
-    
     # Add forecast
     @parameter_function(model, PpvMPPT == (t) -> MPPTnoisy[zero_order_time_index(Dt, t)])
-
-    #= Curtailment is left for the future
-        # Extract params
-        Dt = sets.dTime; # is the timestamp of the PV measurement
-        PpvRated = data["SPV"].RatedPower; # rated power of the panels
-        
-        # MPPT measurement
-        MPPTmeas = data["SPV"].MPPTData[1:length(Dt)]; 
-        PpvMPPT = JuMP.Containers.DenseAxisArray(MPPTmeas, Dt);
-
-        # Add variables
-        @variable(model, 0 ≤ Ppve ≤ PpvRated, Infinite(t)); # output power
-        @variable(model, 0 ≤ PpvDwn ≤ PpvRated, Infinite(t)); # down reg. for FCR
-        
-        # measurement constraints
-        @constraint(model, [tw ∈ Dt], Ppve(tw) ≤ PpvMPPT[tw]);
-        @constraint(model, [tw ∈ Dt], PpvDwn(tw) ≤ PpvMPPT[tw]);
-        
-        # Add power balance btwn FCR and production
-        # Ppv+PpvDwn=PpvMPPT
-        @constraint(model, [tw ∈ Dt], Ppve(tw) + PpvDwn(tw) == PpvMPPT[tw]);
-    =#
-    return model;
-end;
-
-# Thermal devices
-
-"""
-    st(model, data)
-    
-The `st` function calculates the solar thermal power based on the given model and data.
-# Arguments
-- `model::InfiniteModel`: The model object representing the system.
-- `data::Dict`: A dictionary containing the necessary data for the calculation.
-# Returns
-- `model::InfiniteModel`: The updated model object.
-Note: The curtailment part of the code is currently commented out and left for future implementation.
-"""
-function st!(model::InfiniteModel, data::Dict; add_noise::Bool = true) # solar thermal 
-    # The thermal pv/heatpipes are only the converted measurement of the irradiance.
-    t = model[:t]; 
-    Dt = supports(t);
-    t0 = supports(t)[1]; Δt = supports(t)[2]-supports(t)[1];
-    # make new time window
-    it0 = round(Int,(t0/Δt));
-    itend = it0+length(supports(t))-1;
-    # Extract params
-    # PstRated = data["ST"].RatedPower; # rated power of the panels
-    ηST = data["ST"].η; # conversion factor from Electric PV to thermal
-
-    # Extract data
-    MPPTmeas = data["SPV"].MPPTData[it0:itend];
-    # simulated forecast
-    MPPTnoisy = copy(MPPTmeas);
-    if add_noise
-        MPPTnoisy[MPPTmeas .> 0] = [rand(Uniform(0.5*MPPTmeas[tt],1.1*MPPTmeas[tt])) for tt ∈ findall(MPPTmeas .> 0)]
-    end
-    @parameter_function(model, Pst == (t) -> ηST*MPPTnoisy[zero_order_time_index(Dt, t)])
-
-    #= Curtailment is left for the future
-        @variable(model, 0 ≤ Pst ≤ PstRated, Infinite(t));
-        @constraint(model, Pst == ηST*(model[:Ppve]+model[:PpvDwn]));
-    =#
-    return model;
-end;
-
-function heatpump!(model::InfiniteModel, data::Dict) # heat pump
-    # The heat pump has a variable (electrical) and a subordinate finite_param (thermal)
-    # Extract params
-    t = model[:t]; # t0=supports(t)[1];
-    PhpRated = data["HP"].RatedPower; # rated power of the heat pump
-    # ηHP = data["HP"].η; # electrothermal conv efficiency $/kW
-    # Phpe0=data["HP"].P0;
-    
-    # @variable(model, 0 ≤ Phpe ≤ PhpRated, Infinite(t), start=Phpe0);  # Electric power
-    @variable(model, 0 ≤ Phpe ≤ PhpRated, Infinite(t));  # Electric power
-    # @constraint(model, Phpe(t0).== Phpe0)
-    # @variable(model, - PhpRated ≤ Phpe ≤ PhpRated, Infinite(t), start = Phpe0);  # Electric power
-    # @variable(model, - PhpRated*ηHP ≤ Phpt ≤ PhpRated*ηHP, Infinite(t));  # Thermal power
-    
-    # # Dummy variables for bidirectional flow
-    # @variable(model, 1e-4 ≤ PhpPos ≤ PhpRated, Infinite(t), start = Phpe0);
-    # @variable(model, -PhpRated ≤ PhpNeg ≤ -1e-4, Infinite(t), start = 0);
-    # # Bidirectional power flow, ensuring only export or import
-    # @constraint(model, PhpPos + PhpNeg == Phpe);
-    # @constraint(model, PhpPos * PhpNeg == 0);
-    
-    # Thermal power
-    # @constraint(model, Phpt == ηHP*Phpe);
-    return model;
-end;
-
-"""
-    tess(model::InfiniteModel, data::Dict)
-
-The `tess` function models a Thermal Energy Storage System (TESS).
-It adds variables and constraints to the model to represent the TESS's state of charge,
-thermal power, and binary variable for TESS power. The function also includes initial
-conditions and a bucket model constraint.
-
-# Arguments
-- `model::InfiniteModel`: The InfiniteModel to which the TESS variables and constraints will be added.
-- `data::Dict`: A dictionary containing the TESS data, including capacity, power limits, initial state of charge, and thermal efficiency.
-
-# Returns
-- `model::InfiniteModel`: The updated InfiniteModel with the TESS variables and constraints added.
-"""
-function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
-    # Thermal Energy Storage System
-    t = model[:t];
-    t0 = supports(t)[1];
-    # Bucket model
-    # Extract data
-    Qtess = data["TESS"].Q; # Capacity [kWh]
-    PtessMin = data["TESS"].PowerLim[1]; # Min power [kW]
-    PtessMax = data["TESS"].PowerLim[2]; # Max power [kW]
-    # Ptess0 = data["TESS"].P0; # Initial Power [p.u.]
-    SoCtessMin = data["TESS"].SoCLim[1]; # Min State of Charge [p.u.]
-    SoCtessMax = data["TESS"].SoCLim[2]; # Max State of Charge [p.u.]
-    SoCtess0 = data["TESS"].SoC0; # Initial State of Charge [p.u.]
-    ηtess = data["TESS"].η; # thermal efficiency
-       
-    # Add variables
-    @variables(model, begin
-        # SoCtessMin ≤ SoCtess ≤ SoCtessMax, Infinite(t) # State of Charge
-        SoCtess ≥ SoCtessMin, Infinite(t) # State of Charge
-        0 ≤ PtessPos ≤ PtessMax, Infinite(t) # Ptess^+ out power
-        0 ≤ PtessNeg ≤ -PtessMin, Infinite(t)
-    end);
-    # Dummy variables for bidirectional power flow, ensuring only export or import
-    # PtessNeg + PtessPos .== Ptess
-    @expression(model, Ptess, PtessPos * ηtess .- PtessNeg * (1/ηtess))
-    @constraints(model, begin
-        # MPEC with ⟂
-        PtessNeg ⟂ PtessPos
-    end);
-    
-    # Initial conditions
-    @constraint(model, SoCtess(t0) .== SoCtess0)
-
-    # Bucket model
-    @constraint(model, ∂.(SoCtess, t) .== -Ptess/Qtess/3600);
     return model;
 end;
 
@@ -231,52 +87,6 @@ function gridConn!(model::InfiniteModel, data::Dict) # power electronic interfac
     # PgNeg + PgPos .== Pg
     @expression(model, Pg, PgPos * ηg .- PgNeg * (1/ηg))
     @constraint(model, PgNeg ⟂ PgPos) # MPEC with ⟂
-    return model;
-end;
-
-"""
-    gridThermal(model::InfiniteModel, sets::modelSettings, data::Dict)
-
-This function adds the thermal balance to the EMS model.
-
-# Arguments
-- `model::InfiniteModel`: The InfiniteModel object representing the grid.
-- `sets::modelSettings`: The model settings.
-- `data::Dict`: A dictionary containing the necessary data for the calculation.
-
-# Returns
-- `model::InfiniteModel`: The updated InfiniteModel object with the thermal power balance constraint.
-
-"""
-function gridThermal!(model::InfiniteModel, sets::modelSettings, data::Dict; add_noise::Bool = true) # thermal grid
-    # Load data
-    Dt = sets.dTime;
-    t = model[:t]; 
-    t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
-    # make new time window
-    it0 = round(Int,(t0/Δt));
-    itend = it0+length(Dt)-1;
-    # make InfiniteOpt compatible Plt(t) work for arbitrary times
-    loadTh = data["grid"].loadTh[it0:itend];
-    if add_noise
-        # white noise to simulate a forecast
-        εₗᵗʰ= randn(Int(length(loadTh)*Δt/3600)) .* 0.05 # 50W
-        εₗᵗʰ = repeat(εₗᵗʰ, inner = Int(3600/Δt))
-        loadTh = loadTh .+ εₗᵗʰ; # add noise
-        loadTh[loadTh .< 0] .= 0
-    end
-    @parameter_function(model, Plt == (t) -> loadTh[zero_order_time_index(Dt, t)])
-    
-    # When there´s no FCR then there´s no decision variable Ppve hence Pst can just be a @parameter_function.
-    # Extract params
-    ηHP=data["HP"].η; # conversion factor from Electric to thermal heat pump
-    # Thermal Power balance
-    model[:thBalance]=@constraint(model, model[:Pst]+model[:Phpe].*ηHP+model[:Ptess] .==  Plt);
-    resLoadTh = loadTh .- data["ST"].η * data["SPV"].MPPTData[it0:itend];
-    resLoadTh⁺ = copy(resLoadTh); resLoadTh⁻ = copy(resLoadTh);
-    resLoadTh⁺[resLoadTh .< 0] .= 0; resLoadTh⁻[resLoadTh .> 0] .= 0;
-    set_start_value_function(model[:PtessPos], t -> resLoadTh⁺[zero_order_time_index(Dt, t)])
-    set_start_value_function(model[:PtessNeg], t -> -resLoadTh⁻[zero_order_time_index(Dt, t)])
     return model;
 end;
 
@@ -325,8 +135,10 @@ function pei!(model::InfiniteModel, sets::modelSettings, data::Dict; add_noise::
 
     # If we have HP
     Phpe = any(name.(all_variables(model)) .== "Phpe") ? model[:Phpe] : 0
+    # If we have a BESS
+    Pbess = any(name.(all_variables(model)) .== "PbessPos") ? model[:Pbess] : 0
 
-    model[:powerBalance]=@constraint(model, model[:PpvMPPT] + model[:Pbess] + Pev_sum + model[:Pg] .== Ple + Phpe)
+    model[:powerBalance]=@constraint(model, model[:PpvMPPT] + Pbess + Pev_sum + model[:Pg] .== Ple + Phpe)
     resLoad = loadElec .- MPPTmeas;
     resLoad⁺ = copy(resLoad); resLoad⁻ = copy(resLoad);
     resLoad⁺[resLoad .< 0] .= 0; resLoad⁻[resLoad .> 0] .= 0;
@@ -446,10 +258,215 @@ function costFunction!(model, sets::modelSettings, data::Dict; add_noise::Bool =
     return model;
 end;
 
+"""
+    costFunctionDA!(model, sets::modelSettings, data::Dict)
+
+Adds Objective function to the day-ahead model. The model may have three components:
+``C_{\textrm{grid}}``, ``C_{\textrm{loss}}`` and a penalty for not charging the EVs.
+The function includes weights and picks how to build the objective depending on the settings.
+
+# Arguments
+- `model`: The model object representing the FLEXINet simulation.
+- `sets::modelSettings`: The settings object containing the model settings.
+- `data`: The data object containing the simulation data.
+
+# Returns
+- `model`: The updated model object.
+
+"""
+function costFunctionDA!(model, sets::modelSettings, data::Dict; add_noise::Bool = true) # Objective function
+    W = sets.costWeights; t = model[:t];
+    Dt = supports(t);
+    t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
+    # make new time window
+    it0 = round(Int,t0/Δt);
+    itend = it0+length(Dt)-1;
+
+    # Note: We need to use hcat() to form the axis cause otherwise λ[:,c] broadcasts into a vector.
+    # In order to stay consistent with the other DenseAxisArray we need matrices, so here hcat does that for us.
+    priceBuyDA=hcat(data["grid"].λ[it0:itend, 1]) # convert from €/MWh to €/kWs
+    priceSellDA=hcat(data["grid"].λ[it0:itend, 2]) # convert from €/MWh to €/kWs
+    
+    if add_noise
+        # simulated forecast
+        ελᴰᴬ = randn(Int(length(priceBuyDA)*Δt/3600)) .* 20*1e-3/3600 # 20 €/MWh noise
+        ελᴰᴬ = repeat(ελᴰᴬ, inner = Int(3600/Δt))
+        priceBuyDA = priceBuyDA .+ ελᴰᴬ; # add noise
+        priceSellDA = priceSellDA .+ ελᴰᴬ; # add noise
+        # ελᶜᵀ = randn(Int(length(priceBuyCT)*Δt/3600)) .* 20*1e-3/3600 # 20 €/MWh noise
+        # ελᶜᵀ = repeat(ελᶜᵀ, inner = Int(3600/Δt))
+        # priceBuyCT = priceBuyCT .+ ελᶜᵀ; # add noise
+        # priceSellCT = priceSellCT .+ ελᶜᵀ; # add noise
+    end
+    # @parameter_function(model, λbuyᴰᴬ == (t) -> priceBuyDA[zero_order_time_index(Dt, t)])
+    # @parameter_function(model, λsellᴰᴬ == (t) -> priceSellDA[zero_order_time_index(Dt, t)])
+    @parameter_function(model, λbuy == (t) -> priceBuyDA[zero_order_time_index(Dt, t)])
+    @parameter_function(model, λsell == (t) -> priceSellDA[zero_order_time_index(Dt, t)])
+    # Grid costs
+    Wgrid = W[1]; # regularization factor for grid cost. max(λ)*max(P)
+    cgridᴰᴬ = Wgrid .* (λbuy - λsell)/2 * (model[:PgPos] .+ model[:PgNeg]) + (λbuy + λsell)/2 * model[:Pg];
+    # cgridᴰᴬ = Wgrid .* (model[:PgPos]*λbuy .- model[:PgNeg]*λsell);
+    
+    # Aging costs CHECK
+    closs = 1.2; # cost of lost capacity EUR/Ah
+    closs /= 3600 # EUR/As
+    Wloss=W[3]; # regularization factor for lost capacity
+    if Wloss != 0.
+        lossBESS = data["BESS"].GenInfo.Ns * data["BESS"].GenInfo.Np * model[:ilossbess];
+        if any(name.(all_variables(model)) .== "ilossev[1]")
+            lossEV = [data["EV"][n].carBatteryPack.GenInfo.Ns * 
+                    data["EV"][n].carBatteryPack.GenInfo.Np *
+                    model[:ilossev][n] for n ∈ 1:sets.nEV]
+        else
+            lossEV = zeros(sets.nEV);
+        end
+        cQloss = ∫(Wloss*(lossBESS+sum(lossEV[n] for n ∈ 1:sets.nEV)),t);
+    else
+        cQloss = 0.0;
+    end
+
+    # Penalty/soft constraint for TESS overcharging
+    Wlims = W[4]; # penalty for TESS overcharging
+    Tin = model[:Tin]; TinMax = 24 + 273; TinMin = 17 + 273;
+    occ = data["Building"].occupancy[it0:itend]; 
+    @parameter_function(model, 𝒪 == (t) -> occ[zero_order_time_index(Dt, t)])
+    @variable(model, sTin ≥ 0., Infinite(t));
+    @constraint(model, sTin ≥ Tin - TinMax);
+    @constraint(model, sTin ≥ TinMin - Tin);
+    # Define penalty for not charging
+    WSoCDep = W[2]
+    pDep = (any(name.(all_variables(model)) .== "PevPos[1]") ?
+            WSoCDep*sum(model[:ϵSoC][n]^2 for n ∈ eachindex(model[:ϵSoC])) : 0);
+
+    # Define objective function
+    if any(name.(all_variables(model)) .== "ilossbess")
+        # @objective(model, Min, ∫(cgridᴰᴬ,t)/Dt[end] +
+        #     pDep +
+        #     Wlims*∫(sTin .* 𝒪,t)/Dt[end] +
+        #     closs*cQloss/Dt[end])
+            @objective(model, Min, ∫(cgridᴰᴬ,t) +
+            pDep +
+            Wlims*∫(sTin .* 𝒪,t) +
+            closs*cQloss)
+    else
+        @objective(model, Min, ∫(cgridᴰᴬ,t)/Dt[end] +
+            pDep +
+            Wlims*∫(sTin .* 𝒪,t)/Dt[end])
+    end 
+    return model;
+end;
+
+"""
+    costFunctionCT!(model, sets::modelSettings, data::Dict)
+
+Adds Objective function to the continous-time/intra-day model. The model may have three components:
+``C_{\textrm{grid}}``, ``C_{\textrm{loss}}`` and a penalty for not charging the EVs.
+The function includes weights and picks how to build the objective depending on the settings.
+
+# Arguments
+- `model`: The model object representing the FLEXINet simulation.
+- `sets::modelSettings`: The settings object containing the model settings.
+- `data`: The data object containing the simulation data.
+
+# Returns
+- `model`: The updated model object.
+
+"""
+function costFunctionCT!(model, sets::modelSettings, data::Dict, sol_DA; add_noise::Bool = true) # Objective function
+    W = sets.costWeights;
+    Dt = sets.dTime;
+    t = model[:t]; 
+    t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
+    # make new time window
+    it0 = round(Int,t0/Δt);
+    itend = it0+length(Dt)-1;
+
+    # Note: We need to use hcat() to form the axis cause otherwise λ[:,c] broadcasts into a vector.
+    # In order to stay consistent with the other DenseAxisArray we need matrices, so here hcat does that for us.
+    priceBuyCT=hcat(data["grid"].λ[it0:itend, 1]) # convert from €/MWh to €/kWs
+    priceSellCT=hcat(data["grid"].λ[it0:itend, 2]) # convert from €/MWh to €/kWs
+    if add_noise
+        # simulated forecast
+        ελ = randn(Int(length(priceBuyCT)*Δt/3600)) .* 20*1e-3/3600 # 20 €/MWh noise
+        ελ = repeat(ελ, inner = Int(3600/Δt))
+        priceBuyCT = priceBuyCT .+ ελ; # add noise
+        priceSellCT = priceSellCT .+ ελ; # add noise
+    end
+    @parameter_function(model, λbuyᶜᵀ == (t) -> priceBuyCT[zero_order_time_index(Dt, t)])
+    @parameter_function(model, λsellᶜᵀ == (t) -> priceSellCT[zero_order_time_index(Dt, t)])
+    # reference grid power
+    refPg = sol_DA["Pg"][1:Int(length(sol_DA["Pg"])/2)];
+    Dt_DA = sol_DA["t"]; # discrete time of the day-ahead solution
+    Δt_DA = Dt_DA[2]-Dt_DA[1];
+    refPg=repeat(refPg, inner = Int(Δt_DA/Δt))
+    @parameter_function(model, Pgfᴰᴬ == (t) -> refPg[zero_order_time_index(Dt, t)])
+    # Pgfᴰᴬ = model[:Pgfᴰᴬ];
+
+    # Grid costs
+    Wgrid = W[1]; # regularization factor for grid cost. max(λ)*max(P)
+    # cgridᶜᵀ = Wgrid .* ((λbuyᶜᵀ-λsellᶜᵀ)/2 * abs(Pgᶜᵀ - Pgfᴰᴬ) +
+    #                  (λbuyᶜᵀ+λsellᶜᵀ)/2 * (Pgᶜᵀ-Pgfᴰᴬ))
+    Pg = model[:Pg];
+    cgridᶜᵀ = Wgrid .* ((λbuyᶜᵀ-λsellᶜᵀ)/2 * abs(Pg - Pgfᴰᴬ) +
+                     (λbuyᶜᵀ+λsellᶜᵀ)/2 * (Pg-Pgfᴰᴬ))
+    # cgridᶜᵀ = Wgrid .* ((λbuyᶜᵀ-λsellᶜᵀ)/2 * (model[:Pgᶜᵀ⁺]+model[:Pgᶜᵀ⁻]) +
+    #                  (λbuyᶜᵀ+λsellᶜᵀ)/2 * (model[:Pgᶜᵀ]))
+    # for the predictive DA+CT model
+    # cgridᶜᵀ = Wgrid .* (λbuyᶜᵀ*model[:Pgᶜᵀ⁺] .- λsellᶜᵀ*model[:Pgᶜᵀ⁻]);
+        
+    # Aging costs CHECK
+    closs = 1.2; # cost of lost capacity EUR/Ah
+    closs /= 3600 # EUR/As
+    Wloss=W[3]; # regularization factor for lost capacity
+    if Wloss != 0.
+        # cQloss = Wloss != 0 ? ( Wloss*(model[:ilossbess]+sum(model[:ilossev][n] for n ∈ 1:sets.nEV))/3600) : 0.0;
+        lossBESS = data["BESS"].GenInfo.Ns * data["BESS"].GenInfo.Np * model[:ilossbess];
+        if any(name.(all_variables(model)) .== "ilossev[1]")
+            lossEV = [data["EV"][n].carBatteryPack.GenInfo.Ns * 
+                    data["EV"][n].carBatteryPack.GenInfo.Np *
+                    model[:ilossev][n] for n ∈ 1:sets.nEV]
+        else
+            lossEV = zeros(sets.nEV);
+        end
+        cQloss = ∫(Wloss*(lossBESS+sum(lossEV[n] for n ∈ 1:sets.nEV)),t);
+    else
+        cQloss = 0.0;
+    end
+
+    # Penalty/soft constraint for TESS overcharging
+    Wlims = W[4]; # penalty for thermal comfort
+    Tin = model[:Tin]; TinMax = 24 + 273; TinMin = 17 + 273;
+    occ = data["Building"].occupancy[it0:itend]; 
+    @parameter_function(model, 𝒪 == (t) -> occ[zero_order_time_index(Dt, t)])
+    @variable(model, sTin ≥ 0., Infinite(t));
+    @constraint(model, sTin ≥ Tin - TinMax);
+    @constraint(model, sTin ≥ TinMin - Tin);
+
+    # Define penalty for not charging
+    WSoCDep = W[2]
+    pDep = (any(name.(all_variables(model)) .== "PevPos[1]") ?
+            WSoCDep*sum(model[:ϵSoC][n]^2 for n ∈ eachindex(model[:ϵSoC])) : 0);
+
+    # Define objective function
+    if any(name.(all_variables(model)) .== "ilossbess")
+        @objective(model, Min, ∫(cgridᶜᵀ,t) +
+            closs*cQloss +
+            pDep +
+            Wlims*∫(sTin .* 𝒪,t)
+            )
+    else
+        @objective(model, Min, ∫(cgridᶜᵀ,t)/Dt[end] +
+            pDep +
+            Wlims*∫(sTin .* 𝒪,t)/Dt[end]
+            )
+    end 
+    return model;
+end;
+
 ## Utility functions
 # These functions are used to update the EMS data dictionary with the results of the EMS model.
 # They are used in the rolling horizon simulation and future works.
-function update_storage_asset(stgAsset, results::Dict, key::String; typeOpt::String="MPC")
+function update_storage_asset(stgAsset::BESSData, results::Dict, key::String; typeOpt::String="MPC")
     @assert typeOpt ∈ ["MPC", "day-ahead"];
     typeOpt == "MPC" ? shift = 1 : nothing;
     # take the length from results because its the one handled by handleInfeasible()
@@ -555,6 +572,52 @@ function getDuals(model::InfiniteModel)
     return ddict, sdpdict
 end
 
+# Dispatch based on object type to fill out the data dictionary
+function add_to_dict(data, sym, obj::GeneralVariableRef)
+    if typeof(dispatch_variable_ref(obj)) <: Union{InfiniteVariableRef, 
+        SemiInfiniteVariableRef, 
+        PointVariableRef, 
+        FiniteVariableRef,
+        IndependentParameterRef,
+        ParameterFunctionRef,
+        }
+        data[string(sym)] = value(obj)
+    else
+        add_to_dict(data, sym, dispatch_variable_ref(obj))  # Ensure correct dispatch
+    end
+end
+
+function add_to_dict(data, sym, obj::AbstractJuMPScalar)
+    data[string(sym)] = value(obj)  # Expressions don't have names
+end
+
+function add_to_dict(data, sym, obj::AbstractArray)
+    for i in eachindex(obj)
+        index_name = string(sym, "[", join(Tuple(i), ", "), "]")  # Ensure proper indexing
+        add_to_dict(data, index_name, obj[i])
+    end
+end
+
+function add_to_dict(data, sym, obj)
+    return  # Fallback: do nothing
+end
+
+function getResultsFull(model)
+    xdict = Dict()
+    for (sym, obj) in object_dictionary(model)
+        add_to_dict(xdict, sym, obj)
+    end
+    merge!(xdict, Dict("status"=>termination_status(model),
+        # Empty vars for extra states
+        "COPhatᴰ" => zeros(size(supports(model[:t]))),
+        "COPhatᵗᵉˢˢ" => zeros(size(supports(model[:t]))),
+        "T2" => zeros(size(supports(model[:t]))),
+        "T3" => zeros(size(supports(model[:t]))),
+        "T4" => zeros(size(supports(model[:t]))),
+    ))
+    return xdict
+end
+
 """
     concatResultsRH(results::Vector{Dict}; typeOpt::String="MPC")
 
@@ -645,6 +708,91 @@ function concatResultsRH(results::Vector{Dict}; typeOpt::String="MPC")
                 catch e
                     continue
                 end
+            end
+        end
+    end
+    return RHdict
+end
+
+function  concatResultsFlex(results::Vector{Dict}, typeOpt::CT_MPC)
+    keys_list_DA = keys(results[1]);
+    keys_list_CT = keys(results[2]);
+    # outer join the two keys lists
+    keys_list = Set(keys_list_DA) ∪ Set(keys_list_CT)
+
+    steps = length(results)
+    RHdict = Dict()
+ 
+    shift = 1
+    for key in keys_list
+        # Check if the key requires special handling and skip the "status" key
+        if key == :"status" || key == :"compTime"
+            try
+                RHdict[key] = [results[st][key] for st in 1:steps]
+            catch e
+                continue
+            end
+        elseif key == :"γf"
+            # check nEV (number of EVs) to see if we need to handle the γf differently
+            if size(results[1]["γf"],1) == length(results[1]["t"]) 
+                # only one EV
+                γf = [results[st][key][shift+1] for st in 1:steps];
+            else
+                nEV = size(results[1]["γf"],1)
+                γf = [[results[st][key][n][shift+1] for n ∈ 1:nEV] for st in 1:steps];
+            end
+            RHdict[key] = hcat(γf...)
+        else
+            # For other keys, use the original approach
+            # hardcoding the shift for now just in case
+            RHdict[key] = zeros(steps)
+            for st ∈ 1:steps
+                try
+                    if length(results[st][key]) != 1
+                        RHdict[key][st] = results[st][key][shift+1]
+                    else
+                        RHdict[key][st] = results[st][key][shift]
+                    end    
+                catch e
+                    continue
+                end
+            end
+        end
+    end
+    return RHdict
+end
+
+function  concatResultsFlex(results::Vector{Dict}, typeOpt::DayAhead)
+    keys_list_DA = keys(results[1]);
+    keys_list_CT = keys(results[2]);
+    # outer join the two keys lists
+    keys_list = Set(keys_list_DA) ∪ Set(keys_list_CT)
+
+    steps = length(results)
+    RHdict = Dict()
+ 
+    # take the length from results because its the one handled by handleInfeasible()
+    # shift = Int(ceil(length(results[1]["t"])/2))-1
+    Δt = (results[1]["t"][2] - results[1]["t"][1])/3600;
+    shift = Int((24 / Δt)-1);
+    for key in keys_list
+        # Check if the key requires special handling and skip the "status" key
+        if key == :"status" || key == :"compTime" 
+            RHdict[key] = [results[st][key] for st in 1:steps]
+        elseif key == :"γf"
+            if size(results[1]["γf"],1) == length(results[1]["t"]) 
+                γf = vcat([results[st][key][1:shift+1] for st in 1:steps]...);
+            else
+                nEV = size(results[1]["γf"],1)
+                γf = [vcat([results[st][key][n][1:shift+1] for st ∈ 1:steps]...) for n ∈ 1:nEV]
+            end
+            RHdict[key] = γf
+        else
+            # For other keys, use the original approach
+            try
+                RHdict[key] = vcat([results[st][key][1:shift+1] for st in 1:steps]...);
+            catch e
+                continue
             end
         end
     end

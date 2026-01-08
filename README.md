@@ -19,79 +19,88 @@ The common installation is followed. If necessary, add directly this repository 
 
 ```julia
 julia> ]
-Pkg> add https://gitlab.tudelft.nl/dces/emsmodule.git # main
+Pkg> add https://https://github.com/DarioSlaifsteinSk/EMSmodule.git # main
 using EMSmodule
-```
-
-Before connecting to the repository you must have a valid `gitlab.tudelft.nl` account and 2FA enabled with a personal access token. Once you have them you can connect to the repository and follow the steps to install the package. Gitlab will ask you for your credentials and the token in the following order:    
-```julia
-username: <your_NetIDusername>
-password: <your_NetIDpassword>
-username_again: <your_personal_access_token>
-password_again: <your_personal_access_token>
 ```
 
 If you have any issues with the installation, please contact the developers.
 
 ## Usage
 
-The functions to run the EMS are in the files:
+The functions that compose the EMS Library are in the files:
 ```julia
-makeEMSobjs.jl # creates the mutable structs and data loading
+makeEMSobjs.jl # creates the mutable structs/objects
 EMSfns.jl # functions to create the optimization model
 ESSfns.jl # functions to add the ESS to the optimization models
+EMSrfofns.jl # functions for RFO (Random Field Optimization)
+thermfns.jl # thermal devices functions
 makeEMSplots.jl # plotting functions
 makeForecasts.jl # forecasting functions
 simEMS.jl # simulation functions
+testEMS.jl # testing functions UNDER DEVELOPMENT
 ```
-
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-```julia
-using EMSmodule
-ADD EXAMPLES
-```
+Examples on how to use the package are under development.
 
 ## Sequential Decision Making
 
-Following the Universal Modelling Framework (UMF) this package implements Direct Lookahead (DLA) Policies. The DLA is a model-based policy that uses a model of the system to predict the future and optimize the control actions. The available DLAs are a day-ahead (DA) planner and a Model Predictive Controller (MPC). The basic algorithm is depicted in the following figure:
+Following the [Universal Modelling Framework (UMF)](https://castle.princeton.edu/sda/) this library implements Direct Lookahead (DLA) Policies. The DLA is a model-based policy that uses a model of the system to predict the future and optimize the control actions. The available DLAs are a day-ahead (DA) planner and a Model Predictive Controller (MPC). The basic algorithm is depicted in the following figure:
 
 
 ![Approximated Direct Lookahead (DLA)](images/appDLA.png)
 
 
-The DA planner uses a model of the system to predict the future and optimize the control actions for the next 24 hours. The MPC uses a model of the system to predict the future and optimize the control actions for the next 24 hours, but it also uses the actual measurements to update the model and the optimization problem every hour. The MPC is an economic mixed integer non-linear MPC (MINLP-eMPC) receding horizon controller. This last one is under development and debug.
+The DA planner uses a model of the system to predict the future and optimize the control actions for the next 24 hours. The MPC uses a model of the system to predict the future and optimize the control actions for the next 24 hours, but it also uses the actual measurements to update the model and the optimization problem every hour. The MPC is an economic non-linear MPC (NLP-eMPC) receding horizon controller.
 
 ## Forecasting
 
-Pending
-
+The forecasts can either be provided to the optimization model as input data, or they can be simulated by adding noise to the deterministic inputs.
+A native `Julia` forecast package is under development.
 
 ## Support
-For bug or feature requests, please open an issue. For usage questions or extensions please contact developers.
+For bugs or feature requests, please open an issue. For usage questions or extensions please refer to the discussion section.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
+<!-- ## Roadmap
+If you have ideas for releases in the future, it is a good idea to list them in the README. -->
+<!-- 
 ## Contributing
 State if you are open to contributions and what your requirements are for accepting them.
 
 For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser. -->
 
 ## Authors and acknowledgment
 
-This repository contains the work produced for the [FLEXINET](https://www.tudelft.nl/en/eemcs/cooperation/flexinet) project by the [DCE&S group](https://www.tudelft.nl/en/eemcs/the-faculty/departments/electrical-sustainable-energy/dc-systems-energy-conversion-storage), Electrical Sustainable Energy Dept. of the TU Delft. The work belongs to Dario Slaifstein, Gautam Rituraj, and Joel Alpizar.
+This repository contains the work produced for the [FLEXINET](https://www.tudelft.nl/en/eemcs/flexinet) project by the [DCE&S group](https://www.tudelft.nl/en/eemcs/the-faculty/departments/electrical-sustainable-energy/dc-systems-energy-conversion-storage), Electrical Sustainable Energy Dept. of the TU Delft. The work belongs to Dario Slaifstein, Gautam Rituraj, and Joel Alpizar.
 
 ## License
 For open source projects, say how it is licensed. PENDING
 
-## Project status
-Under development.
+<!-- ## Project status
+Under development. -->
 
 # References
-## Getting started
+
+This library is based and used in the following publications:
+
+[1] D. Slaifstein, G. R. C. Mouli, L. Ramirez-Elizondo, and P. Bauer, “Sequential Operation of Residential Energy Hubs using Physics-Based Economic Nonlinear MPC,” Dec. 2025, Accessed: July 29, 2025. [Online]. Available: http://arxiv.org/abs/2507.20621 *Accepted in Applied Energy*
+
+[2] D. Slaifstein, G. R. C. Mouli, L. Ramirez-Elizondo, and P. Bauer, “Aging-aware Energy Management for Residential Multi-Carrier Energy Systems,” Aug. 2025, Accessed: Mar. 22, 2025. [Online]. Available: http://arxiv.org/abs/2503.16139 *Under Review in Journal of Energy Storage*
+
+[3] D. Slaifstein, A. M. Agudin, G. R. C. Mouli, L. Ramírez-Elizondo, and P. Bauer, “Stochastic Mobility Integration into Residential Energy Hubs,” in 2024 IEEE International Conference on Electrical Systems for Aircraft, Railway, Ship Propulsion and Road Vehicles &amp; International Transportation Electrification Conference (ESARS-ITEC), IEEE, Nov. 2024, pp. 1–7. doi: 10.1109/ESARS-ITEC60450.2024.10819794.
+
+Cite as:
+```bibtex
+@article{Slaifstein2025,
+   author = {Darío Slaifstein and Gautham Ram Chandra Mouli and Laura Ramirez-Elizondo and Pavol Bauer},
+   month = {12},
+   title = {Sequential Operation of Residential Energy Hubs using Physics-Based Economic Nonlinear MPC},
+   url = {http://arxiv.org/abs/2507.20621},
+   year = {2025}
+}
+```
+
+<!-- ## Getting started
 
 To make it easy for you to get started with GitLab, here's a list of recommended next steps.
 
@@ -108,7 +117,6 @@ git remote add origin https://gitlab.tudelft.nl/dces/emsmodule.git
 git branch -M main
 git push -uf origin main
 ```
-
 ## Integrate with your tools
 
 - [ ] [Set up project integrations](https://gitlab.tudelft.nl/dces/emsmodule/-/settings/integrations)
@@ -140,3 +148,4 @@ When you're ready to make this README your own, just edit this file and use the 
 ## Suggestions for a good README
 
 Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+-->

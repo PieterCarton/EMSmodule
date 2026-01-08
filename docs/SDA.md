@@ -14,6 +14,7 @@ Following the Universal Modelling Framework (UMF) [1] this package implements Di
 
 The Energy Management System (EMS) aims to minimize the operation costs of the building by controlling the energy flows. The EMS is an optimization-based controller that sends the optimal setpoints to the different devices. The sequential decision problem (SDP) is:
 
+
 $$
 \begin{equation}
     \begin{aligned}

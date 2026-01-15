@@ -83,7 +83,8 @@ Under development. -->
 
 This library is based and used in the following publications:
 
-[1] D. Slaifstein, G. R. C. Mouli, L. Ramirez-Elizondo, and P. Bauer, “Sequential Operation of Residential Energy Hubs using Physics-Based Economic Nonlinear MPC,” Dec. 2025, Accessed: July 29, 2025. [Online]. Available: http://arxiv.org/abs/2507.20621 *Accepted in Applied Energy*
+
+[1] D. Slaifstein, G. R. Chandra Mouli, L. Ramirez-Elizondo, and P. Bauer, “Sequential operation of residential energy hubs using physics-based economic nonlinear MPC,” Appl Energy, vol. 408, p. 127402, Apr. 2026, doi: 10.1016/J.APENERGY.2026.127402.
 
 [2] D. Slaifstein, G. R. C. Mouli, L. Ramirez-Elizondo, and P. Bauer, “Aging-aware Energy Management for Residential Multi-Carrier Energy Systems,” Aug. 2025, Accessed: Mar. 22, 2025. [Online]. Available: http://arxiv.org/abs/2503.16139 *Under Review in Journal of Energy Storage*
 
@@ -91,12 +92,18 @@ This library is based and used in the following publications:
 
 Cite as:
 ```bibtex
-@article{Slaifstein2025,
+@article{Slaifstein2026,
    author = {Darío Slaifstein and Gautham Ram Chandra Mouli and Laura Ramirez-Elizondo and Pavol Bauer},
-   month = {12},
-   title = {Sequential Operation of Residential Energy Hubs using Physics-Based Economic Nonlinear MPC},
-   url = {http://arxiv.org/abs/2507.20621},
-   year = {2025}
+   doi = {10.1016/J.APENERGY.2026.127402},
+   issn = {0306-2619},
+   journal = {Applied Energy},
+   month = {4},
+   pages = {127402},
+   publisher = {Elsevier},
+   title = {Sequential operation of residential energy hubs using physics-based economic nonlinear MPC},
+   volume = {408},
+   url = {https://linkinghub.elsevier.com/retrieve/pii/S0306261926000541},
+   year = {2026}
 }
 ```
 

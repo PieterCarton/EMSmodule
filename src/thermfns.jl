@@ -190,10 +190,11 @@ function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
     # Dummy variables for bidirectional power flow, ensuring only export or import
     # PtessNeg + PtessPos .== Ptess
     @expression(model, Ptess, PtessPos * ηtess .- PtessNeg * (1/ηtess))
-    @constraints(model, begin
-        # MPEC with ⟂
-        PtessNeg ⟂ PtessPos
-    end);
+    # @constraints(model, begin
+    #     # MPEC with ⟂
+    #     PtessNeg ⟂ PtessPos
+    # end);
+    complement!(model, PtessNeg, PtessPos)
     # Initial conditions
     @constraint(model, SoCtess(t0) .== SoCtess0)
     # Bucket model
@@ -429,11 +430,12 @@ function heatpump_nl!(model::InfiniteModel, data::Dict; add_noise::Bool=false) #
     mf1 = 500; # total fluid mass in the pipeline [kg]
     mf2 = mf1;
     @constraints(model, begin
-        Q̇ₕₚᴰ ⟂ Q̇ₕₚᵗᵉˢˢ
+        # Q̇ₕₚᴰ ⟂ Q̇ₕₚᵗᵉˢˢ
         Q̇ₕₚᴰ + Q̇ₕₚᵗᵉˢˢ  .== COPhat*Phpe # produced heat
         Q̇ₕₚᴰ - ηₕₚ * ṁf * cf * (ThpDᵒᵘᵗ - ThpDⁱⁿ) .== 0 # CHECK
         Q̇ₕₚᵗᵉˢˢ - ηₕₚ * ṁf * cf * (ThpTESSᵒᵘᵗ - ThpTESSⁱⁿ) .== 0 # CHECK
     end);
+    complement!(model, Q̇ₕₚᴰ, Q̇ₕₚᵗᵉˢˢ)
     return model;
 end;
 

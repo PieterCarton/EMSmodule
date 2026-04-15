@@ -86,7 +86,8 @@ function gridConn!(model::InfiniteModel, data::Dict) # power electronic interfac
     # Dummy variables for bidirectional power flow, ensuring only export or import
     # PgNeg + PgPos .== Pg
     @expression(model, Pg, PgPos * ηg .- PgNeg * (1/ηg))
-    @constraint(model, PgNeg ⟂ PgPos) # MPEC with ⟂
+    # @constraint(model, PgNeg ⟂ PgPos) # MPEC with ⟂
+    complement!(model, PgNeg, PgPos)
     return model;
 end;
 
@@ -523,7 +524,7 @@ function set_warm_start(model::InfiniteModel, preRes::Dict)
                 end
             end
             # maybe change to just repeating the same value instead of 0s
-            x_opt_interp = linear_interpolation(value.(t), x_opt, extrapolation_bc = Line())
+            x_opt_interp = linear_interpolation(supports.(t), x_opt, extrapolation_bc = Line())
             set_start_value_function(x, t -> x_opt_interp(t))
         end
     end

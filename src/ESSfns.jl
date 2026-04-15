@@ -7,6 +7,8 @@
 # Version: 1.0
 # Date: 10/01/2025
 
+include("fnUtil.jl")
+
 function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
 # battPerf: Battery performance modeling function
 # This function adds variables and constraints to the model obj following the different
@@ -2144,11 +2146,13 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
     # PbessNeg + PbessPos .== Pbess
     @expression(model, Pbess, PbessPos * ηbess .- PbessNeg * (1/ηbess))
     @constraints(model, begin
-        # MPEC with ⟂
-        PbessPos ⟂ PbessNeg
+        # # MPEC with ⟂
+        # PbessPos ⟂ PbessNeg
         # Initial conditions
         SoCbess(t0) ==  SoCbess0
     end);
+
+    complement!(model, PbessPos, PbessNeg)
 
     if termCond ≥ 0.
         t1 = t0 + termCond*3600
@@ -2208,10 +2212,15 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
     @expression(model, Pev[n ∈ 1:nEV], PevPos[n] * ηev[n] .- PevNeg[n] * (1/ηev[n]))
     @constraints(model, begin
         # MPEC with ⟂
-        [n ∈ 1:nEV], PevPos[n] ⟂ PevNeg[n]
+        # [n ∈ 1:nEV], PevPos[n] ⟂ PevNeg[n]
         # Initial conditions
         [n ∈ 1:nEV], SoCev[n](t0) == SoCev0[n] 
     end);
+
+    for n = 1:nEV
+        complement!(model, PevPos[n], PevNeg[n])
+    end
+
     # Operation model
     # length(data["EV"]) == 1 ? model=add_battPerf(model, sets, data["EV"][1]) : model=add_battPerf(model, sets, data["EV"])
     length(data["EV"]) == 1 ? 

@@ -16,6 +16,7 @@ include("makeEMSplots.jl")
 include("simEMS.jl")
 include("testEMS.jl")
 include("makeForecasts.jl")
+include("fnUtil.jl")
 
 Random.seed!(1234);
 

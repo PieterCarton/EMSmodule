@@ -6,14 +6,18 @@ struct native <: complement_formulation end
 struct indicator <: complement_formulation end
 struct multiplicative <: complement_formulation end
 
-const default_formulation = multiplicative()
-
-function complement!(model::InfiniteModel, xpos, xneg)
-    return complement!(model, xpos, xneg, default_formulation)
+struct FormulationSettings
+    complements::complement_formulation
 end
 
+const default_formulation_settings = FormulationSettings(multiplicative())
+
 function complement!(model::InfiniteModel, xpos, xneg)
-    return complement!(model, xpos, xneg, multiplicative())
+    return complement!(model, xpos, xneg, default_formulation_settings.complements)
+end
+
+function complement!(model::InfiniteModel, xpos, xneg, formulation_settings::FormulationSettings)
+    return complement!(model, xpos, xneg, formulation_settings.complements)
 end
 
 function complement!(model::InfiniteModel, xpos, xneg, complement_formulation::native)

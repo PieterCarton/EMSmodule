@@ -7,8 +7,6 @@
 # Version: 1.0
 # Date: 10/01/2025
 
-include("fnUtil.jl")
-
 function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
 # battPerf: Battery performance modeling function
 # This function adds variables and constraints to the model obj following the different
@@ -2119,7 +2117,7 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::Vector{EVD
     return model;    
 end
 
-function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationary battery pack
+function bess!(model::InfiniteModel, sets::modelSettings, formulation_settings::FormulationSettings, data::Dict) # stationary battery pack
     t=model[:t];
     t0=supports(t)[1]; tend = supports(t)[end];
     Δt = supports(t)[2]-supports(t)[1];
@@ -2152,7 +2150,7 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
         SoCbess(t0) ==  SoCbess0
     end);
 
-    complement!(model, PbessPos, PbessNeg)
+    complement!(model, PbessPos, PbessNeg, formulation_settings)
 
     if termCond ≥ 0.
         t1 = t0 + termCond*3600
@@ -2170,7 +2168,7 @@ function bess!(model::InfiniteModel, sets::modelSettings, data::Dict) # stationa
     return model;
 end
 
-function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric vehicle
+function ev!(model::InfiniteModel, sets::modelSettings, formulation_settings::FormulationSettings, data::Dict) # electric vehicle
     t=model[:t];
     t0=supports(t)[1];
     nEV=sets.nEV;
@@ -2218,7 +2216,7 @@ function ev!(model::InfiniteModel, sets::modelSettings, data::Dict) # electric v
     end);
 
     for n = 1:nEV
-        complement!(model, PevPos[n], PevNeg[n])
+        complement!(model, PevPos[n], PevNeg[n], formulation_settings)
     end
 
     # Operation model

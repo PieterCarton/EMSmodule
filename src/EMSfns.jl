@@ -70,7 +70,7 @@ The `gridConn` function is used to define a grid connection of a power electroni
 # Returns
 - `model::InfiniteModel`: The updated simulation model.
 """
-function gridConn!(model::InfiniteModel, data::Dict) # power electronic interface
+function gridConn!(model::InfiniteModel, formulation_settings::FormulationSettings, data::Dict) # power electronic interface
     t = model[:t];
     # Grid limits
     PgMin = data["grid"].PowerLim[1]; # Min power going out
@@ -87,7 +87,7 @@ function gridConn!(model::InfiniteModel, data::Dict) # power electronic interfac
     # PgNeg + PgPos .== Pg
     @expression(model, Pg, PgPos * ηg .- PgNeg * (1/ηg))
     # @constraint(model, PgNeg ⟂ PgPos) # MPEC with ⟂
-    complement!(model, PgNeg, PgPos)
+    complement!(model, PgNeg, PgPos, formulation_settings)
     return model;
 end;
 

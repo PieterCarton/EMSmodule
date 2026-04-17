@@ -167,7 +167,7 @@ conditions and a bucket model constraint.
 # Returns
 - `model::InfiniteModel`: The updated InfiniteModel with the TESS variables and constraints added.
 """
-function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
+function tess!(model::InfiniteModel, formulation_settings::FormulationSettings, data::Dict) # thermal energy storage buffer
     # Thermal Energy Storage System
     t = model[:t];
     t0 = supports(t)[1];
@@ -194,7 +194,7 @@ function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
     #     # MPEC with ⟂
     #     PtessNeg ⟂ PtessPos
     # end);
-    complement!(model, PtessNeg, PtessPos)
+    complement!(model, PtessNeg, PtessPos, formulation_settings)
     # Initial conditions
     @constraint(model, SoCtess(t0) .== SoCtess0)
     # Bucket model
@@ -385,7 +385,7 @@ model = heatpump_nl!(model, data; add_noise=true)
 - [`heatpump!`](@ref): Basic heat pump model with electric power only
 - [`heatpump_milp!`](@ref): MILP approximation with temperature-dependent COP
 """
-function heatpump_nl!(model::InfiniteModel, data::Dict; add_noise::Bool=false) # heat pump
+function heatpump_nl!(model::InfiniteModel, formulation_settings::FormulationSettings, data::Dict; add_noise::Bool=false) # heat pump
     # The heat pump has a variable (electrical) and a subordinate finite_param (thermal)
     t = model[:t];
     Dt = supports(t);
@@ -435,7 +435,7 @@ function heatpump_nl!(model::InfiniteModel, data::Dict; add_noise::Bool=false) #
         Q̇ₕₚᴰ - ηₕₚ * ṁf * cf * (ThpDᵒᵘᵗ - ThpDⁱⁿ) .== 0 # CHECK
         Q̇ₕₚᵗᵉˢˢ - ηₕₚ * ṁf * cf * (ThpTESSᵒᵘᵗ - ThpTESSⁱⁿ) .== 0 # CHECK
     end);
-    complement!(model, Q̇ₕₚᴰ, Q̇ₕₚᵗᵉˢˢ)
+    complement!(model, Q̇ₕₚᴰ, Q̇ₕₚᵗᵉˢˢ, formulation_settings)
     return model;
 end;
 

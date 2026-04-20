@@ -7,6 +7,7 @@ using LaTeXStrings, ColorSchemes
 using XLSX, StateSpaceModels, Statistics, TimeSeries
 using Makie, CairoMakie, GLMakie
 
+include("fnUtil.jl")
 include("makeEMSobjs.jl")
 include("EMSfns.jl")
 include("ESSfns.jl")
@@ -16,7 +17,6 @@ include("makeEMSplots.jl")
 include("simEMS.jl")
 include("testEMS.jl")
 include("makeForecasts.jl")
-include("fnUtil.jl")
 
 Random.seed!(1234);
 

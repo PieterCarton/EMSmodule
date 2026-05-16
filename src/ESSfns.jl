@@ -2150,12 +2150,34 @@ function bess!(model::InfiniteModel, sets::modelSettings, formulation_settings::
         SoCbess(t0) ==  SoCbess0
     end);
 
+    
     complement!(model, PbessPos, PbessNeg, formulation_settings)
 
     if termCond ≥ 0.
         t1 = t0 + termCond*3600
         @constraint(model, termC, SoCbess(t1) ==  SoCbess(t1+24*3600-Δt)) # periodic condition
     end
+
+    # TO-MIP formulation (Elgersma et Al)
+    # @variable(model, 0 ≤ δbess ≤ 1, Infinite(t))
+
+    # @constraints(model, begin
+    #     # maybe use Qbess0? 
+    #     SoCbess(t-1)*Qbess(t-1) >= SoCbessMin*Qbess(t) + PbessPos(t)*Δt
+    #     SoCbess(t-1)*Qbess(t-1) <= SoCbessMax*Qbess(t) + PbessNeg(t)*Δt
+    #     PbessPos <= PbessMax * δbess
+    #     PbessNeg <= PbessMax * δbess
+    # end)
+
+    # Nazir-Almassalkhi formulation
+    # Pmax = max(PbessMax, -PbessMin)
+
+    # @constraints(model, begin
+    #     # maybe use Qbess0? 
+    #     SoCbess(t-1)*Qbess(t-1) >= SoCbessMin*Qbess(t) + (PbessPos(t)-PbessNeg(t))*Δt
+    #     SoCbess(t-1)*Qbess(t-1) <= SoCbessMax*Qbess(t) + (1/ηbess)*PbessNeg(t)*Δt
+    # end)
+
 
     # model=add_battPerf(model, sets, data["BESS"]) # Operation model
     model=add_battPerf(model, sets, data["BESS"], data["BESS"].PerfParameters) # Operation model

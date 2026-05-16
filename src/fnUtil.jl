@@ -4,13 +4,13 @@ abstract type complement_formulation end
 struct no_complement <: complement_formulation end
 struct native <: complement_formulation end
 struct indicator <: complement_formulation end
-struct multiplicative <: complement_formulation end
+struct scholtes <: complement_formulation end
 
 struct FormulationSettings
     complements::complement_formulation
 end
 
-const default_formulation_settings = FormulationSettings(multiplicative())
+const default_formulation_settings = FormulationSettings(scholtes())
 
 function complement!(model::InfiniteModel, xpos, xneg)
     return complement!(model, xpos, xneg, default_formulation_settings.complements)
@@ -24,9 +24,8 @@ function complement!(model::InfiniteModel, xpos, xneg, complement_formulation::n
     return @constraint(model, xpos ⟂ xneg)
 end
 
-function complement!(model::InfiniteModel, xpos, xneg, complement_formulation::multiplicative)
-    epsilon = 0.001
-    @constraint(model, xpos * xneg <= epsilon)
+function complement!(model::InfiniteModel, xpos, xneg, complement_formulation::scholtes)
+    @constraint(model, xpos * xneg <= 1e-5)
 end
 
 # function complement!(model::InfiniteModel, xpos, xneg, t, complement_formulation::indicator)

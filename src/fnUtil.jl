@@ -1,10 +1,11 @@
 using JuMP, InfiniteOpt
 
 abstract type complement_formulation end
-struct no_complement <: complement_formulation end
-struct native <: complement_formulation end
-struct indicator <: complement_formulation end
-struct scholtes <: complement_formulation end
+struct fully_relaxed <: complement_formulation end
+struct native        <: complement_formulation end
+struct indicator     <: complement_formulation end
+struct scholtes      <: complement_formulation end
+struct lin_fukushima <: complement_formulation end
 
 struct FormulationSettings
     complements::complement_formulation
@@ -14,14 +15,17 @@ end
 const default_formulation_settings = FormulationSettings(scholtes(), 1e-5)
 
 function complement!(model::InfiniteModel, xpos, xneg)
-    return complement!(model, xpos, xneg, 
-                       default_formulation_settings.relaxation, 
-                       default_formulation_settings.complements
-                      )
+    return complement!(model, xpos, xneg,
+        default_formulation_settings.relaxation,
+        default_formulation_settings.complements
+    )
 end
 
 function complement!(model::InfiniteModel, xpos, xneg, formulation_settings::FormulationSettings)
     return complement!(model, xpos, xneg, formulation_settings.relaxation, formulation_settings.complements)
+end
+
+function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::fully_relaxed)
 end
 
 function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::native)
@@ -32,8 +36,9 @@ function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_fo
     @constraint(model, xpos * xneg <= relaxation)
 end
 
-function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::no_complement)
-    @constraint(model, xpos * xneg <= relaxation)
+function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::lin_fukushima)
+    @constraint(model, xpos * xneg <= relaxation^2)
+    @constraint(model, (xpos + relaxation) * (xneg + relaxation) >= relaxation^2)
 end
 
 # function complement!(model::InfiniteModel, xpos, xneg, t, complement_formulation::indicator)

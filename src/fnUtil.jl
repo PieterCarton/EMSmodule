@@ -8,24 +8,32 @@ struct scholtes <: complement_formulation end
 
 struct FormulationSettings
     complements::complement_formulation
+    relaxation::Float32
 end
 
-const default_formulation_settings = FormulationSettings(scholtes())
+const default_formulation_settings = FormulationSettings(scholtes(), 1e-5)
 
 function complement!(model::InfiniteModel, xpos, xneg)
-    return complement!(model, xpos, xneg, default_formulation_settings.complements)
+    return complement!(model, xpos, xneg, 
+                       default_formulation_settings.relaxation, 
+                       default_formulation_settings.complements
+                      )
 end
 
 function complement!(model::InfiniteModel, xpos, xneg, formulation_settings::FormulationSettings)
-    return complement!(model, xpos, xneg, formulation_settings.complements)
+    return complement!(model, xpos, xneg, formulation_settings.relaxation, formulation_settings.complements)
 end
 
-function complement!(model::InfiniteModel, xpos, xneg, complement_formulation::native)
+function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::native)
     return @constraint(model, xpos ⟂ xneg)
 end
 
-function complement!(model::InfiniteModel, xpos, xneg, complement_formulation::scholtes)
-    @constraint(model, xpos * xneg <= 1e-5)
+function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::scholtes)
+    @constraint(model, xpos * xneg <= relaxation)
+end
+
+function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::no_complement)
+    @constraint(model, xpos * xneg <= relaxation)
 end
 
 # function complement!(model::InfiniteModel, xpos, xneg, t, complement_formulation::indicator)

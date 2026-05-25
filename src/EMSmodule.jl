@@ -7,8 +7,8 @@ using LaTeXStrings, ColorSchemes
 using XLSX, StateSpaceModels, Statistics, TimeSeries
 using Makie, CairoMakie, GLMakie
 
-include("fnUtil.jl")
 include("makeEMSobjs.jl")
+include("fnUtil.jl")
 include("EMSfns.jl")
 include("ESSfns.jl")
 include("EMSrfofns.jl")

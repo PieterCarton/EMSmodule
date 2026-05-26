@@ -243,6 +243,51 @@ function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData,
     return model;
 end
 
+function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData, perfModel::linearPerfParams)
+# battPerf: Battery performance modeling function
+# This function adds variables and constraints to the model obj following the different
+# types of battery models (Bucket, ECM or PB)
+    t=model[:t];
+    t0=supports(t)[1];
+    @unpack GenInfo, PerfParameters, AgingParameters=data
+    @unpack type=PerfParameters   
+    @unpack_Generic GenInfo
+    @unpack ocvLine = OCVParam;
+    Npbess = Np; Nsbess = Ns; 
+    Qbess0 = initQ*SoHQ; ηbess = η; # Coulombic efficiency
+    PbessMax = PowerLim[2]; # Max power [kW]
+    SoCbess0 = SoC0;
+    aOCV=ocvLine[1]; bOCV=ocvLine[2];
+    vmin = vLim[1]; # Min voltage [V]
+    vmax = vLim[2]; # Max voltage [V]
+    imax = 1e3*PbessMax/Npbess/Nsbess/vmin; # Max current [A]
+
+    
+    # Model variables
+    OCVbess0 = aOCV+bOCV*SoCbess0;
+    @variables(model, begin
+        vmin ≤ OCVbess ≤ vmax, Infinite(t), (start=OCVbess0) # open circuit voltage of the cell
+        0 ≤ ibess⁺ ≤ imax, Infinite(t), (start=0)
+        0 ≤ ibess⁻ ≤ imax, Infinite(t), (start=0)
+        0 ≤ ilossbess ≤ 0, Infinite(t), (start=0)
+        Qbess0 ≤ Qbess ≤ Qbess0, Infinite(t), (start=0)
+    end);
+    @expression(model, ibess, ibess⁺ - ηbess * ibess⁻)
+
+    OCVbess_static = aOCV + bOCV * 0.5
+
+    # Linear Battery model constraints
+    @constraints(model, begin
+        OCVbess == OCVbess_static
+        ibess⁺ * OCVbess_static == 1e3*model[:PbessPos]/Npbess/Nsbess
+        ibess⁻ * OCVbess_static == 1e3*model[:PbessNeg]/Npbess/Nsbess
+    end);
+    
+    @constraint(model, ∂.(model[:SoCbess], t) * 1e3 .== -ibess/Qbess0/3600 * 1e3) # Static Qbess
+
+    return model;
+end
+
 function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData, perfModel::ECMPerfParams)
 # battPerf: Battery performance modeling function
 # This function adds variables and constraints to the model obj following the different
@@ -2152,35 +2197,17 @@ function bess!(model::InfiniteModel, sets::modelSettings, formulation_settings::
 
     
     complement!(model, PbessPos, PbessNeg, formulation_settings)
+    
 
     if termCond ≥ 0.
         t1 = t0 + termCond*3600
         @constraint(model, termC, SoCbess(t1) ==  SoCbess(t1+24*3600-Δt)) # periodic condition
     end
 
-    # TO-MIP formulation (Elgersma et Al)
-    # @variable(model, 0 ≤ δbess ≤ 1, Infinite(t))
-
-    # @constraints(model, begin
-    #     # maybe use Qbess0? 
-    #     SoCbess(t-1)*Qbess(t-1) >= SoCbessMin*Qbess(t) + PbessPos(t)*Δt
-    #     SoCbess(t-1)*Qbess(t-1) <= SoCbessMax*Qbess(t) + PbessNeg(t)*Δt
-    #     PbessPos <= PbessMax * δbess
-    #     PbessNeg <= PbessMax * δbess
-    # end)
-
-    # Nazir-Almassalkhi formulation
-    # Pmax = max(PbessMax, -PbessMin)
-
-    # @constraints(model, begin
-    #     # maybe use Qbess0? 
-    #     SoCbess(t-1)*Qbess(t-1) >= SoCbessMin*Qbess(t) + (PbessPos(t)-PbessNeg(t))*Δt
-    #     SoCbess(t-1)*Qbess(t-1) <= SoCbessMax*Qbess(t) + (1/ηbess)*PbessNeg(t)*Δt
-    # end)
-
 
     # model=add_battPerf(model, sets, data["BESS"]) # Operation model
     model=add_battPerf(model, sets, data["BESS"], data["BESS"].PerfParameters) # Operation model
+    battery_model!(model, formulation_settings.battery_model_relaxation, data["BESS"].GenInfo)
     # check if aging model is needed
     if sets.costWeights[3] != 0
         # model=add_battDeg(model, data["BESS"]) # Aging model

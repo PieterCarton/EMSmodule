@@ -262,6 +262,11 @@ end
     type="bucket";
 end
 
+@with_kw mutable struct linearPerfParams <: PerfParams
+# Bucket model.
+    type="linear";
+end
+
 @with_kw mutable struct ECMPerfParams <: PerfParams
 # Equivalent Circuit Model (ECM) from Plett (2016).
     type="ECM";

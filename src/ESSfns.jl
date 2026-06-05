@@ -2195,9 +2195,9 @@ function bess!(model::InfiniteModel, sets::modelSettings, formulation_settings::
         SoCbess(t0) ==  SoCbess0
     end);
 
-    
-    complement!(model, PbessPos, PbessNeg, formulation_settings)
-    
+    if formulation_settings.battery_model_relaxation == exact()
+        complement!(model, PbessPos, PbessNeg, formulation_settings)
+    end
 
     if termCond ≥ 0.
         t1 = t0 + termCond*3600

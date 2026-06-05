@@ -10,6 +10,7 @@ struct fischer_burmeister <: complement_formulation end
 
 abstract type battery_model_relaxation end
 struct exact             <: battery_model_relaxation end
+struct simple_lp         <: battery_model_relaxation end
 struct nazir_almassalkhi <: battery_model_relaxation end
 struct extn_lp           <: battery_model_relaxation end
 struct to_lp             <: battery_model_relaxation end
@@ -45,6 +46,9 @@ function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_fo
 end
 
 function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::lin_fukushima)
+    # lower and upper bounds not needed!
+    delete_lower_bound(xpos)
+    delete_lower_bound(xneg)
     @constraint(model, xpos * xneg <= relaxation^2)
     @constraint(model, (xpos + relaxation) * (xneg + relaxation) >= relaxation^2)
 end
@@ -53,54 +57,28 @@ function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_fo
     @constraint(model, xpos + xneg - (xpos^2 + xneg^2 + relaxation)^(1/2) == 0)
 end
 
-function battery_model!(model::InfiniteModel, battery_model_relaxation::extn_lp, genInfo::Generic)
-    t=model[:t];
-    Δt=Float64(supports(t)[2]-supports(t)[1])
-
-    # variables
-    PbessPos = model[:PbessPos]
-    PbessNeg = model[:PbessNeg]
-    ibess⁻   = model[:ibess⁻]
-    ibess⁺   = model[:ibess⁺]
-    Qbess    = model[:Qbess]
-    SoCbess  = model[:SoCbess]
-    
-    # Extract data
-    @unpack PowerLim, SoCLim, initQ, SoHQ = genInfo
-    PbessMax = PowerLim[2]; # Max power [kW]
-    PbessMin = PowerLim[1]; # Min power [kW]
-    SoCbessMin = SoCLim[1]; # Min State of Charge [p.u.]
-    SoCbessMax = SoCLim[2]; # Max State of Charge [p.u.]
-    Qbess0 = initQ*SoHQ;    # Intial capacity
-
-    # 2e
-    for (t_minus_one, t) in zip(supports(t)[1:end-1], supports(t)[2:end])
-        @constraint(model, ibess⁻(t) * Δt <= Qbess(t) * SoCbessMax - Qbess0 * SoCbess(t_minus_one))
-    end
-    
-    # 2f
-    for (t_minus_one, t) in zip(supports(t)[1:end-1], supports(t)[2:end])
-        @constraint(model, ibess⁺(t) * Δt <= Qbess(t) * SoCbessMin - Qbess0 * SoCbess(t_minus_one))
-    end
-
-     # 1g
-    @constraint(model, PbessPos <= (PbessMax - (PbessMax/PbessMin)) * PbessNeg)
-end
-
 function battery_model!(model::InfiniteModel, battery_model_relaxation::exact, genInfo::Generic)
 end
 
+function battery_model!(model::InfiniteModel, battery_model_relaxation::simple_lp, genInfo::Generic)
+end
+
 function battery_model!(model::InfiniteModel, battery_model_relaxation::nazir_almassalkhi, genInfo::Generic)
-    # variables
-    PbessPos = model[:PbessPos]
-    PbessNeg = model[:PbessNeg]
-
     # parameters
-    PbessMax = upper_bound(PbessPos)
-    PbessMin = upper_bound(PbessNeg)
-    Pmax = max(PbessMax, PbessMin)
+    # @unpack PowerLim, vLim, Np, Ns, ηC = genInfo
+    # imax     =1e3*PbessMax/Np/Ns/vLim[1]
 
-    @constraint(model, PbessPos + PbessNeg <= Pmax)
+    # # variables
+    # ibess⁻   = model[:ibess⁻]
+    # ibess⁺   = model[:ibess⁺]
+
+    # # parameters
+    # PbessMax = upper_bound(PbessPos)
+    # PbessMin = upper_bound(PbessNeg)
+    # Pmax = max(PbessMax, PbessMin)
+
+    # @constraint(model, ibess, ibess⁺ - ibess⁻)
+    # @constraint(model, ibess⁺ - ibess⁻ <= Pmax)
 end
 
 function battery_model!(model::InfiniteModel, battery_model_relaxation::extn_lp, genInfo::Generic)
@@ -116,25 +94,28 @@ function battery_model!(model::InfiniteModel, battery_model_relaxation::extn_lp,
     SoCbess  = model[:SoCbess]
     
     # Extract data
-    @unpack PowerLim, SoCLim, initQ, SoHQ = genInfo
+    @unpack PowerLim, SoCLim, initQ, SoHQ, η = genInfo
     PbessMax = PowerLim[2]; # Max power [kW]
     PbessMin = PowerLim[1]; # Min power [kW]
     SoCbessMin = SoCLim[1]; # Min State of Charge [p.u.]
     SoCbessMax = SoCLim[2]; # Max State of Charge [p.u.]
-    Qbess0 = initQ*SoHQ;    # Intial capacity
+    Qbess0 = initQ*SoHQ;    # Intial capacity [Ah]
 
     # 2e
     for (t_minus_one, t) in zip(supports(t)[1:end-1], supports(t)[2:end])
-        @constraint(model, ibess⁻(t) * Δt <= Qbess(t) * SoCbessMax - Qbess0 * SoCbess(t_minus_one))
+        @constraint(model, ibess⁻(t) * Δt * (1/3600) <= (Qbess(t) * SoCbessMax - Qbess0 * SoCbess(t_minus_one))/η)
     end
     
     # 2f
     for (t_minus_one, t) in zip(supports(t)[1:end-1], supports(t)[2:end])
-        @constraint(model, ibess⁺(t) * Δt <= Qbess(t) * SoCbessMin - Qbess0 * SoCbess(t_minus_one))
+        @constraint(model, ibess⁺(t) * Δt * (1/3600) <= Qbess0 * SoCbess(t_minus_one) - Qbess(t) * SoCbessMin)
     end
 
-     # 1g
+    # 1g
     @constraint(model, PbessPos <= (PbessMax - (PbessMax/PbessMin)) * PbessNeg)
+
+    # println(model)
+    # throw("STOPPED")
 end
 
 function battery_model!(model::InfiniteModel, battery_model_relaxation::to_lp, genInfo::Generic)
@@ -157,22 +138,24 @@ function battery_model!(model::InfiniteModel, battery_model_relaxation::to_lp, g
     PbessMin = PowerLim[1]; # Min power [kW]
     SoCbessMin = SoCLim[1]; # Min State of Charge [p.u.]
     SoCbessMax = SoCLim[2]; # Max State of Charge [p.u.]
-    Qbess0 = initQ*SoHQ;    # Intial capacity
+    Qbess0 = initQ*SoHQ*3600;    # Intial capacity in As
 
-    # 3b
+    # # 4a
     for (t_minus_one, t) in zip(supports(t)[1:end-1], supports(t)[2:end])
         @constraint(model, SoCbess(t_minus_one) * Qbess0 >= SoCbessMin * Qbess0 + ibess⁺(t) * Δt)
     end
     
-    # 3c
+    # 4b
     for (t_minus_one, t) in zip(supports(t)[1:end-1], supports(t)[2:end])
         @constraint(model, SoCbess(t_minus_one) * Qbess0 <= SoCbessMax * Qbess0 - ibess⁻(t) * Δt)
     end
 
-    # 3d
+    # 1c
     @constraint(model, PbessNeg <= -PbessMin * δₚ)
-    # 3e
+    # 1d
     @constraint(model, PbessPos <= PbessMax *(1 - δₚ))
+    # println(model)
+    # throw("STOPPED")
 end
 
 # function complement!(model::InfiniteModel, xpos, xneg, t, complement_formulation::indicator)

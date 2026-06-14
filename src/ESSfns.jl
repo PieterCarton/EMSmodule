@@ -1821,6 +1821,100 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData, ag
     return model;    
 end
 
+function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::CaiAgingParams)
+    t=model[:t];
+    ilossbess=model[:ilossbess];
+    Qbess=model[:Qbess];
+    SoCbess=model[:SoCbess];
+    ibess⁺=model[:ibess⁺];
+    ibess⁻=model[:ibess⁻];
+    
+    @unpack GenInfo, PerfParameters, AgingParameters=data
+    @unpack initQ, SoHQ = GenInfo
+    @unpack type=AgingParameters;
+    
+    @unpack_CaiAgingParams AgingParameters
+    a, b1, b2, c = p
+    
+    @constraints(model, begin
+        ilossbess .== a .* SoCbess .+ b1 .* ibess⁻ .+ b2 .* ibess⁺ .+ c
+        ∂.(Qbess, t) * 1e5.== -ilossbess/3600 * 1e5 # Cell capacity, remember unit transf As <-> Ah
+    end);
+    
+    return model;
+end
+
+function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData, agingModel::CaiAgingParams)
+    t=model[:t];
+    ilossev=model[:ilossev];
+    Qev=model[:Qev];
+    SoCev=model[:SoCev];
+    iev⁺=model[:iev⁺];
+    iev⁻=model[:iev⁻];
+    nEV=sets.nEV;
+    
+    @unpack GenInfo, PerfParameters, AgingParameters=data.carBatteryPack
+    @unpack initQ, SoHQ = GenInfo
+    @unpack type=AgingParameters;
+    
+    @unpack_CaiAgingParams AgingParameters
+    a, b1, b2, c = p
+    
+    @constraints(model, begin
+        [n ∈ 1:nEV], ilossev[n] .== a .* SoCev[n] .+ b1 .* iev⁻[n] .+ b2 .* iev⁺[n] .+ c
+        [n ∈ 1:nEV], ∂.(Qev[n], t) * 1e5.== -ilossev[n]/3600 * 1e5 # Cell capacity, remember unit transf As <-> Ah
+    end);
+    
+    return model;
+end
+
+function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::FortenbacherAgingParams)
+    t=model[:t];
+    ilossbess=model[:ilossbess];
+    Qbess=model[:Qbess];
+    SoCbess=model[:SoCbess];
+    ibess⁺=model[:ibess⁺];
+    ibess⁻=model[:ibess⁻];
+    
+    @unpack GenInfo, PerfParameters, AgingParameters=data
+    @unpack initQ, SoHQ = GenInfo
+    @unpack type=AgingParameters;
+    
+    @unpack_FortenbacherAgingParams AgingParameters
+    a, b, c, d, e = p
+    
+    @constraints(model, begin
+        ilossbess .== b .* (SoCbess .- a).^2 + c .* ibess⁺ + d .* ibess⁻ + e .* ibess⁻.^2 # total aging. Since ηLi  ≥ ηLiMin --> iLi=0
+        ∂.(Qbess, t) * 1e5.== -ilossbess/3600 * 1e5 # Cell capacity, remember unit transf As <-> Ah
+    end);
+    
+    return model;
+end
+
+function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData, agingModel::FortenbacherAgingParams)
+    t=model[:t];
+    ilossev=model[:ilossev];
+    Qev=model[:Qev];
+    SoCev=model[:SoCev];
+    iev⁺=model[:iev⁺];
+    iev⁻=model[:iev⁻];
+    nEV=sets.nEV;
+    
+    @unpack GenInfo, PerfParameters, AgingParameters=data.carBatteryPack
+    @unpack initQ, SoHQ = GenInfo
+    @unpack type=AgingParameters;
+    
+    @unpack_FortenbacherAgingParams AgingParameters
+    a, b, c, d, e = p
+    
+    @constraints(model, begin
+        [n ∈ 1:nEV], ilossev[n] .== b .* (SoCev[n] .- a).^2 + c .* iev⁺[n] + d .* iev⁻[n] + e .* iev⁻[n].^2 # total aging. Since ηLi  ≥ ηLiMin --> iLi=0
+        [n ∈ 1:nEV], ∂.(Qev[n], t) * 1e5.== -ilossev[n]/3600 * 1e5 # Cell capacity, remember unit transf As <-> Ah
+    end);
+    
+    return model;
+end
+
 function add_battDeg(model::InfiniteModel, sets::modelSettings, data::Vector{EVData})
     t=model[:t];
     t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];

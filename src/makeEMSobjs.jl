@@ -189,6 +189,7 @@ end
     loadType::String # "GV" or "mffbas" or "base_models"
     year::Int64 = 2023
     cellID::String = "SYNSANYO" # cell ID for the battery packs
+    aging_model = JinAgingParams()
 end
 
 #--------------- DEVICE DEFINITIONS ---------------#
@@ -474,6 +475,29 @@ end
     # this has to be constant because the plating doesn't have to occure ηLiMin>0
     σn::Float64=100.0; # Electronic conductivity [S/m] [5]
     εₛ::Float64=0.59; # Volume fraction of solid electrolyte [5]
+end
+
+@with_kw mutable struct CaiAgingParams <: AgingParams
+    type="cai";
+    p::Array{Float64}= [
+        2.907011544507248e-6, 
+        5.193624503400145e-7, 
+        5.18331806233828e-7,
+        -1.7402990712250524e-6
+    ];
+    iloss0::Float64=0.0; # initial value of the capacity fade current
+end
+
+@with_kw mutable struct FortenbacherAgingParams <: AgingParams
+    type="fortenbacher";
+    p::Array{Float64}= [
+        0.22719558485322483,
+        3.0209707631401267e-6,
+        3.8560280903004917e-7,
+        1.6707552925141006e-7,
+        4.4071159711072955e-8,
+    ];
+    iloss0::Float64=0.0; # initial value of the capacity fade current
 end
 
 @with_kw mutable struct ReniersAgingParams <: AgingParams

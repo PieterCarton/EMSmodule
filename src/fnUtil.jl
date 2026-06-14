@@ -19,6 +19,7 @@ struct FormulationSettings
     battery_model_relaxation
     complements::complement_formulation
     relaxation::Float32
+    # aging_params::AgingParams
 end
 
 const default_formulation_settings = FormulationSettings(exact(), scholtes(), 1e-5)

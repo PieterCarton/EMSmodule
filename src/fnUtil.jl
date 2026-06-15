@@ -3,7 +3,7 @@ using JuMP, InfiniteOpt
 abstract type complement_formulation end
 struct fully_relaxed      <: complement_formulation end
 struct native             <: complement_formulation end
-struct indicator          <: complement_formulation end
+struct direct             <: complement_formulation end
 struct scholtes           <: complement_formulation end
 struct lin_fukushima      <: complement_formulation end
 struct fischer_burmeister <: complement_formulation end
@@ -35,6 +35,10 @@ function complement!(model::InfiniteModel, xpos, xneg, formulation_settings::For
 end
 
 function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::fully_relaxed)
+end
+
+function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::direct)
+    return @constraint(model, xpos * xneg <= 0)
 end
 
 function complement!(model::InfiniteModel, xpos, xneg, relaxation, complement_formulation::native)

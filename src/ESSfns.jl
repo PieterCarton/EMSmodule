@@ -2311,6 +2311,134 @@ function bess!(model::InfiniteModel, sets::modelSettings, formulation_settings::
     return model;
 end
 
+function bess_alt!(model::InfiniteModel, sets::modelSettings, formulation_settings::FormulationSettings, data::Dict, ps, p_indices) # stationary battery pack
+    t=model[:t];
+    t0=supports(t)[1]; tend = supports(t)[end];
+    Δt = supports(t)[2]-supports(t)[1];
+    fs = 3600/Δt; # sampling frequency [1/hr]
+
+    # Extract data
+    # General Info
+    @unpack PowerLim, P0, SoCLim, SoC0, ηC, termCond = data["BESS"].GenInfo
+    PbessMax = PowerLim[2]; # Max power [kW]
+    PbessMin = PowerLim[1]; # Min power [kW]
+    SoCbessMin = SoCLim[1]; # Min State of Charge [p.u.]
+    SoCbessMax = SoCLim[2]; # Max State of Charge [p.u.]
+    SoCbess0 = SoC0; # Initial SoC [p.u.]
+    ηbess = ηC; # Charger/converter efficiency
+    
+    # Add variables
+    @variables(model, begin
+        SoCbessMin ≤ SoCbess ≤ SoCbessMax, Infinite(t) # State of Charge    
+        0 ≤ PbessPos ≤ PbessMax, Infinite(t) # Pbess^+ out power
+        0 ≤ PbessNeg ≤ -PbessMin, Infinite(t)
+    end)
+    
+    # Bidirectional power flow, ensuring only export or import
+    # PbessNeg + PbessPos .== Pbess
+    @expression(model, Pbess, PbessPos * ηbess .- PbessNeg * (1/ηbess))
+    @constraints(model, begin
+        # # MPEC with ⟂
+        # PbessPos ⟂ PbessNeg
+        # Initial conditions
+        SoCbess(t0) ==  SoCbess0
+    end);
+
+    if formulation_settings.battery_model_relaxation == exact()
+        complement!(model, PbessPos, PbessNeg, formulation_settings)
+    end
+
+    if termCond ≥ 0.
+        t1 = t0 + termCond*3600
+        @constraint(model, termC, SoCbess(t1) ==  SoCbess(t1+24*3600-Δt)) # periodic condition
+    end
+
+
+    # model=add_battPerf(model, sets, data["BESS"]) # Operation model
+    model=add_battPerf(model, sets, data["BESS"], data["BESS"].PerfParameters) # Operation model
+    battery_model!(model, formulation_settings.battery_model_relaxation, data["BESS"].GenInfo)
+    # check if aging model is needed
+    if sets.costWeights[3] != 0
+        # model=add_battDeg(model, data["BESS"]) # Aging model
+        model=add_battDeg_alt(model, data["BESS"], data["BESS"].AgingParameters, ps, p_indices, 3600*24 #=4 hours=#) # Aging model
+    end
+    
+    return model;
+end
+
+function add_battDeg_alt(model::InfiniteModel, data::BESSData, agingModel::JinAgingParams, ps, p_indices, estimation_window)
+# battDeg: Battery degradation modeling function
+# This function adds variables and constraints to the model obj following the different
+    # 2. PB Jin: 
+    # Jin (2022) doi: 10.1016/j.electacta.2021.139651
+    # Some useful refs.:
+    # SEI: Solid Electrolyte Interface
+    # AM: Active Material
+    # c^*s,p: Bulk concentration of solvent reactant/reduction product at equilibrium state
+    t=model[:t];
+    t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
+    tend = supports(t)[end]
+    ilossbess=model[:ilossbess];
+    Qbess=model[:Qbess];
+    SoCbess=model[:SoCbess];
+    ibess=model[:ibess];
+    ibess⁺=model[:ibess⁺];
+    ibess⁻=model[:ibess⁻];
+
+    R = 8.314 # Gas constant [J/K/mol]
+    T = 25+273 # pack temperature [K]
+    F = 96485 # Faraday constant [C/mol]
+    
+    @unpack GenInfo, PerfParameters, AgingParameters=data
+    @unpack initQ, SoHQ = GenInfo
+    @unpack type=AgingParameters;
+    Qbess0 = initQ*SoHQ;
+    
+    # Physics-based from Jin (2022)
+    # Most equations and values come from Jin (2022), a small piece comes from Jin (2017) the original modeling paper.
+    @unpack_JinAgingParams AgingParameters
+    Tref=T; # Reference temperature 
+
+    ηk = 2*R*T/F*asinh(ibess/nSEI/as/An/Ln/i0) # kinetic overpotential    
+    z = SoCbess*(z100p-z0p)+z0p
+    OCVn = 0.6379+0.5416*ℯ^(-305.5309*z) +
+        0.044*tanh(-(z-0.1958)/0.1088) -
+        0.1978*tanh((z-1.0571)/0.0854) -
+        0.6875*tanh((z+0.0117)/0.0529) -
+        0.0175*tanh((z-0.5692)/0.0875)
+    θ = ℯ^(nSEI*F/R/T*(ηk+OCVn-OCVs)) # fitting param
+    iSEI = (kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ)*√(initT+t))*Qbess0;
+
+    iAM = kAM*ℯ^(-EAM/R/T)*(SoCbess*100)*(ibess⁺+ibess⁻)*Qbess0;
+
+    # The loss function parameters change over time based on the SoC at each timestep in previous results
+    println(supports(t))
+    println(p_indices)
+    p_indices_interp = linear_interpolation(supports(t), [p_indices[2:96]; 4.0])
+    @parameter_function(model, param_a == (t) -> ps[Int(p_indices_interp(t))][1])
+    @parameter_function(model, param_b == (t) -> ps[Int(p_indices_interp(t))][2])
+    @parameter_function(model, param_c == (t) -> ps[Int(p_indices_interp(t))][3])
+    @parameter_function(model, param_d == (t) -> ps[Int(p_indices_interp(t))][4])
+    @parameter_function(model, param_e == (t) -> ps[Int(p_indices_interp(t))][5])
+    @parameter_function(model, param_f == (t) -> ps[Int(p_indices_interp(t))][6])
+
+    windowEnd = t0+estimation_window
+    isBeforeWindow(t_s) = t_s <= windowEnd
+    isAfterWindow(t_s) = t_s > windowEnd
+    beforeWindow = DomainRestriction(isAfterWindow, t)
+    afterWindow = DomainRestriction(isAfterWindow, t)
+
+    # @constraints(model, begin
+        # simplified degradation model
+    @constraint(model, ilossbess == param_b * (SoCbess - param_a)^2 + param_c * ibess⁺ + param_d * ibess⁻ + param_e * ibess⁻^2 + param_f * (ibess⁻ + ibess⁺) * SoCbess, beforeWindow)
+        # normal degradation model)
+    @constraint(model, ilossbess * 1e5 == (iSEI + iAM) * 1e5, afterWindow)
+    @constraint(model, ∂.(Qbess, t) * 1e5 == -ilossbess/3600 * 1e5)
+    @constraint(model, Qbess(t0) == Qbess0; )# cell capacity)
+    # end);
+    return model;
+end
+
 function ev!(model::InfiniteModel, sets::modelSettings, formulation_settings::FormulationSettings, data::Dict) # electric vehicle
     t=model[:t];
     t0=supports(t)[1];

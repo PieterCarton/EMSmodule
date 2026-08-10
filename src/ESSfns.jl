@@ -2290,6 +2290,7 @@ function bess!(model::InfiniteModel, sets::modelSettings, formulation_settings::
     end);
 
     if formulation_settings.battery_model_relaxation == exact()
+        println("exact!!!!")
         complement!(model, PbessPos, PbessNeg, formulation_settings)
     end
 
@@ -2360,7 +2361,7 @@ function bess_alt!(model::InfiniteModel, sets::modelSettings, formulation_settin
     # check if aging model is needed
     if sets.costWeights[3] != 0
         # model=add_battDeg(model, data["BESS"]) # Aging model
-        model=add_battDeg_alt(model, data["BESS"], data["BESS"].AgingParameters, ps, p_indices, 3600*24 #=4 hours=#) # Aging model
+        model=add_battDeg_alt(model, data["BESS"], data["BESS"].AgingParameters, ps, p_indices, 3600*8 #=4 hours=#) # Aging model
     end
     
     return model;
@@ -2412,9 +2413,11 @@ function add_battDeg_alt(model::InfiniteModel, data::BESSData, agingModel::JinAg
     iAM = kAM*ℯ^(-EAM/R/T)*(SoCbess*100)*(ibess⁺+ibess⁻)*Qbess0;
 
     # The loss function parameters change over time based on the SoC at each timestep in previous results
-    println(supports(t))
-    println(p_indices)
-    p_indices_interp = linear_interpolation(supports(t), [p_indices[2:96]; 4.0])
+    # println(supports(t))
+    # println(p_indices)
+    # just pad it enough
+    p_indices = [p_indices[2:end]; fill(4.0, 96)]
+    p_indices_interp = linear_interpolation(supports(t), p_indices[2:97])
     @parameter_function(model, param_a == (t) -> ps[Int(p_indices_interp(t))][1])
     @parameter_function(model, param_b == (t) -> ps[Int(p_indices_interp(t))][2])
     @parameter_function(model, param_c == (t) -> ps[Int(p_indices_interp(t))][3])

@@ -477,6 +477,14 @@ end
     εₛ::Float64=0.59; # Volume fraction of solid electrolyte [5]
 end
 
+@with_kw mutable struct LinearizedAgingParams <: AgingParams
+    type="linearized";
+    jin_aging_params = JinAgingParams();
+    previous_result = nothing;
+    max_SoC_divergence = 0.1;    # How much the new SoC is allowed to differ from the SoC in the previous resul
+    iloss0::Float64=0.0; # initial value of the capacity fade current
+end
+
 @with_kw mutable struct CaiAgingParams <: AgingParams
     type="cai";
     p::Array{Float64}= [

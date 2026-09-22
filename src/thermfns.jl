@@ -642,6 +642,8 @@ function gridThermal_T!(model::InfiniteModel, sets::modelSettings, data::Dict; a
     cf = data["HP"].c; # specific heat capacity [J/kg.K]
     @unpack_BuildingData data["Building"]
     ambT = data["Building"].ambT[it0:itend]; # CHECK add to object
+    # Make sure Tin0 is not lower than ambT0
+    Tin0 = max(Tin0, ambT[1] + 273.15)
     radiation = data["Building"].Gir[it0:itend]; # CHECK add to object
     𝒮 = length(A) # number of surfaces
     Cair *= 3600 # to [kWs/kg.K]

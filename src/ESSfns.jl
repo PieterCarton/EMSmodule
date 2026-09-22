@@ -6,6 +6,7 @@
 # Branch: multi_disp_sim
 # Version: 1.0
 # Date: 10/01/2025
+using Enzyme: autodiff, Reverse, Active, Const, Duplicated
 
 function add_battPerf(model::InfiniteModel, sets::modelSettings, data::BESSData)
 # battPerf: Battery performance modeling function
@@ -1819,6 +1820,162 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData, ag
     end);
     
     return model;    
+end
+
+function i_am(x, data::BESSData, AgingParameters::JinAgingParams)
+    println(x)
+    # @unpack i, SoC, t =  x
+    i, SoC, t = x[1], x[2], x[3]
+
+    R = 8.314 # Gas constant [J/K/mol]
+    T = 25+273 # pack temperature [K]
+    F = 96485 # Faraday constant [C/mol]
+    
+    @unpack GenInfo, PerfParameters = data
+    @unpack initQ, SoHQ = GenInfo
+    @unpack type=AgingParameters;
+    Qbess0 = initQ*SoHQ;
+    
+    # Physics-based from Jin (2022)
+    # Most equations and values come from Jin (2022), a small piece comes from Jin (2017) the original modeling paper.
+    @unpack_JinAgingParams AgingParameters
+    Tref=T; # Reference temperature 
+
+    # Loss of Active Material (AM)
+    # Parameter list
+    # kAM = kAM⁰/εAM⁰, [1/Ah]
+    # EAM: activation energy [J/mol]
+    iAM = kAM*ℯ^(-EAM/R/T)*(SoC*100)*abs(i)*Qbess0;
+
+    return iAM
+end
+
+function i_sei(x, data::BESSData, AgingParameters::JinAgingParams)
+    i, SoC, t = x[1], x[2], x[3]
+
+    R = 8.314 # Gas constant [J/K/mol]
+    T = 25+273 # pack temperature [K]
+    F = 96485 # Faraday constant [C/mol]
+    
+    @unpack GenInfo, PerfParameters = data
+    @unpack initQ, SoHQ = GenInfo
+    @unpack type=AgingParameters;
+    Qbess0 = initQ*SoHQ;
+    
+    # Physics-based from Jin (2022)
+    # Most equations and values come from Jin (2022), a small piece comes from Jin (2017) the original modeling paper.
+    @unpack_JinAgingParams AgingParameters
+    Tref=T; # Reference temperature 
+    # SEI layer.
+    # Parameters list
+    # nSEI: number of electrons transferred in the SEI side-reaction;
+    # λ=c^*s.√Ds/c^*p.√Dp=constant
+    # OCVs: Open circuit potential of the side reaction [V];
+    # OCVn: open circuit voltage of the anode [V] # object coming from Cell.
+    # as: Specific surface area of the Anode [m2/m3]
+    # A: Active surface area of the Anode [m2]
+    # Ln: length of the anode [m]
+    # i0: exchange current [A/m2]
+    # kSEI: kinetic rate constant [1/√sec]
+    # ESEI: activation energy of SEI side-reaction [J/mol]
+    # MSEI: molar weight of the SEI layer [kg/mol]
+    # ρSEI: density of the SEI layer [kg/m3]
+    ηk = 2*R*T/F*asinh(i/nSEI/as/An/Ln/i0) # kinetic overpotential    
+    z = SoC*(z100p-z0p)+z0p
+    OCVn = 0.6379+0.5416*ℯ^(-305.5309*z) +
+        0.044*tanh(-(z-0.1958)/0.1088) -
+        0.1978*tanh((z-1.0571)/0.0854) -
+        0.6875*tanh((z+0.0117)/0.0529) -
+        0.0175*tanh((z-0.5692)/0.0875)
+    θ = ℯ^(nSEI*F/R/T*(ηk+OCVn-OCVs)) # fitting param
+    iSEI = (kSEI*ℯ^(-ESEI/R/T))/(nSEI*(1+λ*θ)*√(initT+t))*Qbess0;
+
+    return iSEI
+end
+
+function loss_gradient_at_point(a, data::BESSData, AgingParameters::JinAgingParams)
+    ∇i_am  = zero(a)
+    ∇i_sei = zero(a)
+
+    autodiff(Reverse, i_am, Active, Duplicated(a, ∇i_am), Const(data), Const(AgingParameters))
+    autodiff(Reverse, i_sei, Active, Duplicated(a, ∇i_sei), Const(data), Const(AgingParameters))
+
+    return ∇i_am + ∇i_sei
+end
+
+function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::LinearizedAgingParams)
+
+    t=model[:t];
+    Dt = supports(t);
+    ilossbess=model[:ilossbess];
+    SoCbess=model[:SoCbess];
+    ibess=model[:ibess];
+    Qbess=model[:Qbess];
+
+    if isnothing(agingModel.previous_result)
+        @constraints(model, begin
+            ilossbess .== 0
+            ∂.(Qbess, t) * 1e5.== -ilossbess/3600 * 1e5 # Cell capacity, remember unit transf As <-> Ah
+        end);
+        return model
+    end
+
+    jin_aging = agingModel.jin_aging_params
+    prev_results = agingModel.previous_result
+    max_SoC_divergence = agingModel.max_SoC_divergence
+
+    prev_ibess = agingModel.previous_result["ibess"]
+    prev_SoC   = agingModel.previous_result["SoCbess"]
+
+    # Take all [i, SoC, t] points from previous solution
+    xs = collect.(eachrow(hcat(prev_ibess, prev_SoC, prev_results["t"])))
+    println(xs)
+    
+    prev_iloss = i_am.(xs, Ref(data), Ref(jin_aging)) + i_sei.(xs, Ref(data), Ref(jin_aging))
+    loss_gradients = loss_gradient_at_point.(xs, Ref(data), Ref(jin_aging))
+    loss_gradients = stack(loss_gradients, dims=1)
+
+    ∂iloss_∂i = loss_gradients[:, 1]
+    ∂iloss_∂SoC = loss_gradients[:, 2]
+    ∂iloss_∂t = loss_gradients[:, 3]
+
+    @parameter_function(model, loss_constant == (t) -> prev_iloss[1:4:end][zero_order_time_index(Dt, t)])
+
+    @parameter_function(model, loss_coeff_i == (t) -> ∂iloss_∂i[1:4:end][zero_order_time_index(Dt, t)])
+    @parameter_function(model, loss_coeff_SoC == (t) -> ∂iloss_∂SoC[1:4:end][zero_order_time_index(Dt, t)])
+    # @parameter_function(model, loss_coeff_t == (t) -> ∂iloss_∂t[zero_order_time_index(Dt, t)])
+
+    @parameter_function(model, loss_offset_i == (t) -> prev_ibess[1:4:end][zero_order_time_index(Dt, t)])
+    @parameter_function(model, loss_offset_SoC == (t) -> prev_SoC[1:4:end][zero_order_time_index(Dt, t)])
+    # @parameter_function(model, loss_offset_t == (t) -> ∂iloss_∂t[zero_order_time_index(Dt, t)])
+
+    
+    @constraints(model, begin
+        ilossbess .== loss_constant + loss_coeff_i * (ibess - loss_offset_i) + loss_coeff_SoC * (SoCbess - loss_offset_SoC)
+        ∂.(Qbess, t) * 1e5.== -ilossbess/3600 * 1e5 # Cell capacity, remember unit transf As <-> Ah
+    end);
+
+    # restrict SoC, to ensure setpoints are similar between iterations
+    @constraints(model, begin
+        SoCbess <= loss_offset_SoC + max_SoC_divergence
+        SoCbess >= loss_offset_SoC - max_SoC_divergence
+    end);
+    
+    return model;
+end
+
+function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData, agingModel::LinearizedAgingParams)
+    t=model[:t];
+    t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
+    ilossev=model[:ilossev]; Qev=model[:Qev];
+
+    nEV=sets.nEV;
+    
+    @constraints(model, begin
+        [n ∈ 1:nEV], ilossev[n] * 1e5 .== 0.0
+    end);
+
+    return model
 end
 
 function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::CaiAgingParams)

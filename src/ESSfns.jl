@@ -1823,7 +1823,6 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData, ag
 end
 
 function i_am(x, data::BESSData, AgingParameters::JinAgingParams)
-    println(x)
     # @unpack i, SoC, t =  x
     i, SoC, t = x[1], x[2], x[3]
 
@@ -1929,7 +1928,6 @@ function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::Linearize
 
     # Take all [i, SoC, t] points from previous solution
     xs = collect.(eachrow(hcat(prev_ibess, prev_SoC, prev_results["t"])))
-    println(xs)
     
     prev_iloss = i_am.(xs, Ref(data), Ref(jin_aging)) + i_sei.(xs, Ref(data), Ref(jin_aging))
     loss_gradients = loss_gradient_at_point.(xs, Ref(data), Ref(jin_aging))
@@ -2447,7 +2445,6 @@ function bess!(model::InfiniteModel, sets::modelSettings, formulation_settings::
     end);
 
     if formulation_settings.battery_model_relaxation == exact()
-        println("exact!!!!")
         complement!(model, PbessPos, PbessNeg, formulation_settings)
     end
 
@@ -2570,8 +2567,6 @@ function add_battDeg_alt(model::InfiniteModel, data::BESSData, agingModel::JinAg
     iAM = kAM*ℯ^(-EAM/R/T)*(SoCbess*100)*(ibess⁺+ibess⁻)*Qbess0;
 
     # The loss function parameters change over time based on the SoC at each timestep in previous results
-    # println(supports(t))
-    # println(p_indices)
     # just pad it enough
     p_indices = [p_indices[2:end]; fill(4.0, 96)]
     p_indices_interp = linear_interpolation(supports(t), p_indices[2:97])

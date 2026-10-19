@@ -1423,6 +1423,7 @@ end
 function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::JinAgingParams)
 # battDeg: Battery degradation modeling function
 # This function adds variables and constraints to the model obj following the different
+# println("JINNNN DEGGGGG CALLEEDDDD")
     # 2. PB Jin: 
     # Jin (2022) doi: 10.1016/j.electacta.2021.139651
     # Some useful refs.:
@@ -1735,7 +1736,8 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData, ag
 
     # Physics-based from Jin (2022)
     # Most equations and values come from Jin (2022), a small piece comes from Jin (2017) the original modeling paper.
-    @unpack_JinAgingParams agingParams # should change in the future.
+    @unpack_JinAgingParams agingModel # should change in the future.
+    
     Tref=T; # Reference temperature [K]
     # SEI layer.
     # Parameters list
@@ -1911,7 +1913,7 @@ function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::Linearize
     ibess=model[:ibess];
     Qbess=model[:Qbess];
 
-    if isnothing(agingModel.previous_result)
+    if isnothing(agingModel.previous_result) || isempty(agingModel.previous_result)
         @constraints(model, begin
             ilossbess .== 0
             ∂.(Qbess, t) * 1e5.== -ilossbess/3600 * 1e5 # Cell capacity, remember unit transf As <-> Ah
@@ -1920,14 +1922,18 @@ function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::Linearize
     end
 
     jin_aging = agingModel.jin_aging_params
-    prev_results = agingModel.previous_result
     max_SoC_divergence = agingModel.max_SoC_divergence
+    prev_result = agingModel.previous_result
 
-    prev_ibess = agingModel.previous_result["ibess"]
-    prev_SoC   = agingModel.previous_result["SoCbess"]
-
-    # Take all [i, SoC, t] points from previous solution
-    xs = collect.(eachrow(hcat(prev_ibess, prev_SoC, prev_results["t"])))
+    prev_t     = prev_result["t"]
+    prev_ibess = prev_result["ibess"]
+    prev_SoC   = prev_result["SoCbess"]
+    
+    # since the time has shifted since previous solution and/or have different time resolution
+    # we need to linearly interpolate the previous solution to our new t supports
+    interp_SoC   = linear_interpolation(prev_t, prev_SoC, extrapolation_bc = Line()).(Dt)
+    interp_ibess = linear_interpolation(prev_t, prev_ibess, extrapolation_bc = Line()).(Dt)
+    xs = collect.(eachrow(hcat(interp_ibess, interp_SoC, Dt)))
     
     prev_iloss = i_am.(xs, Ref(data), Ref(jin_aging)) + i_sei.(xs, Ref(data), Ref(jin_aging))
     loss_gradients = loss_gradient_at_point.(xs, Ref(data), Ref(jin_aging))
@@ -1937,14 +1943,14 @@ function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::Linearize
     ∂iloss_∂SoC = loss_gradients[:, 2]
     ∂iloss_∂t = loss_gradients[:, 3]
 
-    @parameter_function(model, loss_constant == (t) -> prev_iloss[1:4:end][zero_order_time_index(Dt, t)])
+    @parameter_function(model, loss_constant == (t) -> prev_iloss[zero_order_time_index(Dt, t)])
 
-    @parameter_function(model, loss_coeff_i == (t) -> ∂iloss_∂i[1:4:end][zero_order_time_index(Dt, t)])
-    @parameter_function(model, loss_coeff_SoC == (t) -> ∂iloss_∂SoC[1:4:end][zero_order_time_index(Dt, t)])
+    @parameter_function(model, loss_coeff_i == (t) -> ∂iloss_∂i[zero_order_time_index(Dt, t)])
+    @parameter_function(model, loss_coeff_SoC == (t) -> ∂iloss_∂SoC[zero_order_time_index(Dt, t)])
     # @parameter_function(model, loss_coeff_t == (t) -> ∂iloss_∂t[zero_order_time_index(Dt, t)])
 
-    @parameter_function(model, loss_offset_i == (t) -> prev_ibess[1:4:end][zero_order_time_index(Dt, t)])
-    @parameter_function(model, loss_offset_SoC == (t) -> prev_SoC[1:4:end][zero_order_time_index(Dt, t)])
+    @parameter_function(model, loss_offset_i == (t) -> interp_ibess[zero_order_time_index(Dt, t)])
+    @parameter_function(model, loss_offset_SoC == (t) -> interp_SoC[zero_order_time_index(Dt, t)])
     # @parameter_function(model, loss_offset_t == (t) -> ∂iloss_∂t[zero_order_time_index(Dt, t)])
 
     
@@ -1954,29 +1960,81 @@ function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::Linearize
     end);
 
     # restrict SoC, to ensure setpoints are similar between iterations
-    @constraints(model, begin
-        SoCbess <= loss_offset_SoC + max_SoC_divergence
-        SoCbess >= loss_offset_SoC - max_SoC_divergence
-    end);
+    # @constraints(model, begin
+    #     SoCbess <= loss_offset_SoC + max_SoC_divergence
+    #     SoCbess >= loss_offset_SoC - max_SoC_divergence
+    # end);
     
     return model;
 end
 
 function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData, agingModel::LinearizedAgingParams)
+    # return add_battDeg(model, sets, data, agingModel.jin_aging_params)
     t=model[:t];
+    Dt = supports(t);
     t0=supports(t)[1]; Δt=supports(t)[2]-supports(t)[1];
-    ilossev=model[:ilossev]; Qev=model[:Qev];
+    ilossev=model[:ilossev]; Qev=model[:Qev]; iev=model[:iev]; SoCev=model[:SoCev]
 
     nEV=sets.nEV;
+    # println("Heya, its EV time")
     
-    @constraints(model, begin
-        [n ∈ 1:nEV], ilossev[n] * 1e5 .== 0.0
-    end);
+    for n in 1:sets.nEV
 
+        # println("Linearized EV")
+        if isnothing(agingModel.previous_result) || isempty(agingModel.previous_result)
+            # println("Nothing")
+            @constraints(model, begin
+                ilossev[n] .== 0
+                ∂.(Qev[n], t) * 1e5.== -ilossev[n]/3600 * 1e5 # Cell capacity, remember unit transf As <-> Ah
+            end);
+            return model
+        end
+
+        jin_aging = agingModel.jin_aging_params
+        max_SoC_divergence = agingModel.max_SoC_divergence
+        prev_result = agingModel.previous_result
+
+        prev_t     = prev_result["t"]
+        prev_iev = prev_result["iev[$n]"]
+        prev_SoC   = prev_result["SoCev[$n]"]
+        
+        # since the time has shifted since previous solution and/or have different time resolution
+        # we need to linearly interpolate the previous solution to our new t supports
+        interp_SoC   = linear_interpolation(prev_t, prev_SoC, extrapolation_bc = Line()).(Dt)
+        interp_iev = linear_interpolation(prev_t, prev_iev, extrapolation_bc = Line()).(Dt)
+        xs = collect.(eachrow(hcat(interp_iev, interp_SoC, Dt)))
+        
+        prev_iloss = i_am.(xs, Ref(data.carBatteryPack), Ref(jin_aging)) + i_sei.(xs, Ref(data.carBatteryPack), Ref(jin_aging))
+        loss_gradients = loss_gradient_at_point.(xs, Ref(data.carBatteryPack), Ref(jin_aging))
+        loss_gradients = stack(loss_gradients, dims=1)
+
+        ∂iloss_∂i = loss_gradients[:, 1]
+        ∂iloss_∂SoC = loss_gradients[:, 2]
+        ∂iloss_∂t = loss_gradients[:, 3]
+
+        @parameter_function(model, loss_constant_ev[n] == (t) -> prev_iloss[zero_order_time_index(Dt, t)])
+
+        @parameter_function(model, loss_coeff_i_ev[n] == (t) -> ∂iloss_∂i[zero_order_time_index(Dt, t)])
+        @parameter_function(model, loss_coeff_SoC_ev[n] == (t) -> ∂iloss_∂SoC[zero_order_time_index(Dt, t)])
+        # @parameter_function(model, loss_coeff_t == (t) -> ∂iloss_∂t[zero_order_time_index(Dt, t)])
+
+        @parameter_function(model, loss_offset_i_ev[n] == (t) -> interp_iev[zero_order_time_index(Dt, t)])
+        @parameter_function(model, loss_offset_SoC_ev[n] == (t) -> interp_SoC[zero_order_time_index(Dt, t)])
+        # @parameter_function(model, loss_offset_t == (t) -> ∂iloss_∂t[zero_order_time_index(Dt, t)])
+
+        
+        @constraints(model, begin
+            ilossev[n] .== loss_constant_ev[n] + loss_coeff_i_ev[n] * (iev[n] - loss_offset_i_ev[n]) + loss_coeff_SoC_ev[n] * (SoCev[n] - loss_offset_SoC_ev[n])
+            ∂.(Qev[n], t) * 1e5.== -ilossev[n]/3600 * 1e5 # Cell capacity, remember unit transf As <-> Ah
+        end);
+    end
+
+    println("End")
     return model
 end
 
 function add_battDeg(model::InfiniteModel, data::BESSData, agingModel::CaiAgingParams)
+    # power system modeling.org
     t=model[:t];
     ilossbess=model[:ilossbess];
     Qbess=model[:Qbess];

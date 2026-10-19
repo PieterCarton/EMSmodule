@@ -504,6 +504,7 @@ end;
 
 function set_warm_start(model::InfiniteModel, preRes::Dict)
 # Warm starts the model variables with the results from the previous optimization.
+    prev_t = preRes["t"]
     t = model[:t];
     # [set_start_value_function(x[i], t -> x_opt_interp[i](t)) for i ∈ 1:2]
     # x = all_variables(model)
@@ -514,17 +515,10 @@ function set_warm_start(model::InfiniteModel, preRes::Dict)
                 println(length(x_opt))
                 append!(x_opt, zeros(96))
             =#
-            haskey(preRes, name(x)) ? x_opt = preRes[name(x)] : x_opt = zeros(length(supports(t)))
-            # length(x_opt) == length(supports(t)) ? nothing : append!(x_opt, zeros(length(supports(t))-length(x_opt)))
-            if length(x_opt) != length(supports(t))
-                if length(x_opt) > length(supports(t))
-                    x_opt = x_opt[1:length(supports(t))]
-                else # length(x_opt) < length(supports(t))
-                    append!(x_opt, zeros(length(supports(t))-length(x_opt)))
-                end
-            end
-            # maybe change to just repeating the same value instead of 0s
-            x_opt_interp = linear_interpolation(supports.(t), x_opt, extrapolation_bc = Line())
+            haskey(preRes, name(x)) ? x_opt = preRes[name(x)] : x_opt = zeros(length(prev_t))
+
+            # x_opt_interp = linear_interpolation(supports.(t), x_opt, extrapolation_bc = Line())
+            x_opt_interp = linear_interpolation(prev_t, x_opt, extrapolation_bc = Line())
             set_start_value_function(x, t -> x_opt_interp(t))
         end
     end

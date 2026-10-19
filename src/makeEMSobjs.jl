@@ -587,15 +587,15 @@ function rejCriteriaEnergy(μDrive, σDrive, tDep, tArr, Tconn, Ns, Np, vmax, Q0
     for i ∈ eachindex(Ereq)
         if Ereq[i] > Emax[i] || Ereq[i] > Eev
             # pick the lowest bound between charger and EV battery
-            println("Energy required for session $i is too high")
+            # println("Energy required for session $i is too high")
             if Emax[i] < Eev
                 # adjust the power to the max that can be charged
-                println("Adjusting power to the max that can be charged")
+                # println("Adjusting power to the max that can be charged")
                 println("From $(Ereq[i]) kWh to $(Emax[i]) kWh")
                 Pdrive[i] = Emax[i] / (tArr[i] - tDep[i])
 
             else
-                println("Adjusting power to the max that can be charged")
+                # println("Adjusting power to the max that can be charged")
                 println("From $(Ereq[i]) kWh to $(Eev) kWh")
                 Pdrive[i] = Eev / (tArr[i] - tDep[i])
             end

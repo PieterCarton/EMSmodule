@@ -11,7 +11,6 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
-GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 GaussianMixtures = "cc18c42c-b769-54ff-9e2a-b28141a64aae"
 HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
 InfiniteOpt = "20393b10-9daf-11e9-18c9-8db751c92c57"
@@ -31,6 +30,9 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 TimeSeries = "9e3dc215-6440-5c97-bce1-76c03772f85e"
 XLSX = "fdbf4ff8-1666-58a4-91e7-1b58723a45e0"
+
+[weakdeps]
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 
 [compat]
 Enzyme = "0.13.191"

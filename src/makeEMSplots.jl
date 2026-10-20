@@ -1,7 +1,7 @@
 ## make EMS Plots
 # This script is used to make the plots for the EMS. It is called by the wrapper script, wrapperEMS.ipynb.
 # The script is called with the JSON file name con containing the data to be plotted.
-
+using GLMakie
 
 """
     makeInputsplot(gridModel::gridData, spvModel::SPVData)

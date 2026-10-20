@@ -5,7 +5,7 @@ using Parameters, Random
 using JSON3, MAT, CSV, StatsBase, DataFrames, Dates, LiiBRA, GaussianMixtures, Serialization
 using LaTeXStrings, ColorSchemes
 using XLSX, StateSpaceModels, Statistics, TimeSeries
-using Makie, CairoMakie, GLMakie
+using Makie, CairoMakie
 
 include("makeEMSobjs.jl")
 include("fnUtil.jl")
@@ -13,10 +13,15 @@ include("EMSfns.jl")
 include("ESSfns.jl")
 include("EMSrfofns.jl")
 include("thermfns.jl")
-include("makeEMSplots.jl")
 include("simEMS.jl")
 include("testEMS.jl")
 include("makeForecasts.jl")
+
+const HAS_GLMAKIE = Base.find_package("GLMakie") !== nothing
+
+if HAS_GLMAKIE
+    include("makeEMSplots.jl")
+end
 
 Random.seed!(1234);
 

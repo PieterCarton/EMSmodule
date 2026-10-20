@@ -2012,14 +2012,14 @@ function add_battDeg(model::InfiniteModel, sets::modelSettings, data::EVData, ag
         ∂iloss_∂SoC = loss_gradients[:, 2]
         ∂iloss_∂t = loss_gradients[:, 3]
 
-        @parameter_function(model, loss_constant_ev[n] == (t) -> prev_iloss[zero_order_time_index(Dt, t)])
+        @parameter_function(model, loss_constant_ev[[n]] == (t) -> prev_iloss[zero_order_time_index(Dt, t)])
 
-        @parameter_function(model, loss_coeff_i_ev[n] == (t) -> ∂iloss_∂i[zero_order_time_index(Dt, t)])
-        @parameter_function(model, loss_coeff_SoC_ev[n] == (t) -> ∂iloss_∂SoC[zero_order_time_index(Dt, t)])
+        @parameter_function(model, loss_coeff_i_ev[[n]] == (t) -> ∂iloss_∂i[zero_order_time_index(Dt, t)])
+        @parameter_function(model, loss_coeff_SoC_ev[[n]] == (t) -> ∂iloss_∂SoC[zero_order_time_index(Dt, t)])
         # @parameter_function(model, loss_coeff_t == (t) -> ∂iloss_∂t[zero_order_time_index(Dt, t)])
 
-        @parameter_function(model, loss_offset_i_ev[n] == (t) -> interp_iev[zero_order_time_index(Dt, t)])
-        @parameter_function(model, loss_offset_SoC_ev[n] == (t) -> interp_SoC[zero_order_time_index(Dt, t)])
+        @parameter_function(model, loss_offset_i_ev[[n]] == (t) -> interp_iev[zero_order_time_index(Dt, t)])
+        @parameter_function(model, loss_offset_SoC_ev[[n]] == (t) -> interp_SoC[zero_order_time_index(Dt, t)])
         # @parameter_function(model, loss_offset_t == (t) -> ∂iloss_∂t[zero_order_time_index(Dt, t)])
 
         
